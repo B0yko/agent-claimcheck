@@ -165,7 +165,8 @@ agent-claimcheck check traces.jsonl --detector cascade --max-usd 0.50
 
 ```python
 from agent_claimcheck import load_traces, Checker
-checker = Checker(detector="cascade-offline")              # or Checker.from_config("claimcheck.toml")
+
+checker = Checker(detector="cascade-offline")  # or Checker.from_config("claimcheck.toml")
 for r in checker.check(load_traces("traces.jsonl"), probes="probes.jsonl"):
     print(r.trace_id, r.verdict, r.p_success, r.confidence, r.reasons[0].detail)
 ```
