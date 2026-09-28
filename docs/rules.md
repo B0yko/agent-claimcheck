@@ -31,7 +31,11 @@ claims:
   pattern-based claim extraction when a trace has no structured
   `final_claim.claims` (see `docs/python-api.md` for `ClaimExtractor`).
   Patterns compile with `re.IGNORECASE`; named groups become subject
-  fields.
+  fields. A pack named `generic` is a special case: its `claim_patterns`
+  (shipped as the built-in `done | completed | finished | all set` → `done`
+  mapping) are tried only as a fallback, when every applicable domain
+  pack's own patterns matched nothing — a `generic` pack has no `claims`
+  and is never consulted by the rules detector itself.
 - `claims`: `{claim_type: rule}`. Each rule has:
   - `action` (required): a glob a `tool_call` name must match.
   - `receipt` (required, may be empty): checks on that call's
