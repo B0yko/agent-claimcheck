@@ -6,6 +6,7 @@ server started inside the test — no real network, no paid call.
 from __future__ import annotations
 
 import json
+import re
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -39,6 +40,51 @@ def test_example_mixed_has_one_of_each_verdict_per_domain_and_exits_1() -> None:
     for row in rows:
         counts[row["verdict"]] = counts.get(row["verdict"], 0) + 1
     assert counts == {"verified": 3, "false_success": 3, "unverifiable": 3, "skipped": 3}
+
+
+def test_table_colors_verdicts_and_right_aligns_p_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    from rich.console import Console
+
+    from agent_claimcheck import cli
+
+    monkeypatch.setattr(
+        cli, "console", Console(force_terminal=True, color_system="standard", width=200)
+    )
+    result = runner.invoke(app, ["check", "example:mixed"])
+    assert result.exit_code == 1, result.output
+    out = result.stdout
+    for verdict, code in (
+        ("verified", "32"),
+        ("false_success", "31"),
+        ("unverifiable", "33"),
+        ("skipped", "2"),
+    ):
+        assert f"\x1b[{code}m{verdict}" in out  # the verdict cell
+        assert f"\x1b[{code}m3 {verdict}\x1b[0m" in out  # its count in the summary line
+
+
+def test_table_columns_without_color() -> None:
+    result = runner.invoke(app, ["check", "example:mixed"])
+    assert result.exit_code == 1, result.output
+    out = result.stdout
+    assert "\x1b[" not in out
+    header = next(line for line in out.splitlines() if "trace_id" in line)
+    for column in ("trace_id", "domain", "verdict", "p_success", "top reason"):
+        assert column in header
+    cells = {
+        parts[1].strip(): parts[4]
+        for parts in (line.split("\u2502") for line in out.splitlines())
+        if len(parts) == 7 and parts[1].strip().startswith("booking-")
+    }
+    assert sorted(cells) == ["booking-01", "booking-02", "booking-03", "booking-04"]
+    for trace_id, cell in cells.items():
+        if trace_id == "booking-04":  # skipped: no p_success
+            assert cell.strip() == ""
+        else:  # right-aligned, two decimals
+            assert re.fullmatch(r" {2,}\d\.\d\d ", cell), cell
+    assert out.rstrip().endswith(
+        "12 traces: 3 verified, 3 false_success, 3 unverifiable, 3 skipped"
+    )
 
 
 def test_fail_on_false_success_and_unverifiable() -> None:

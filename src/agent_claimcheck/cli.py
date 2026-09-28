@@ -9,7 +9,8 @@ from typing import Literal
 
 import typer
 from rich.console import Console
-from rich.table import Table
+from rich.table import Column, Table
+from rich.text import Text
 
 from agent_claimcheck.gate import UnknownPriceError
 from agent_claimcheck.ledger import Price
@@ -30,6 +31,13 @@ _Verdict = Literal["verified", "false_success", "unverifiable", "skipped"]
 
 #: Verdicts `check --fail-on` and the summary line may name.
 _VERDICTS: tuple[_Verdict, ...] = ("verified", "false_success", "unverifiable", "skipped")
+#: How the `check` table and summary line color each verdict.
+_VERDICT_STYLES: dict[str, str] = {
+    "verified": "green",
+    "false_success": "red",
+    "unverifiable": "yellow",
+    "skipped": "dim",
+}
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 dataset_app = typer.Typer(add_completion=False, no_args_is_help=True)
@@ -367,16 +375,33 @@ def check(
         )
 
     counts = Counter(r.verdict for r in results)
-    summary = f"{len(results)} traces: " + ", ".join(
-        f"{counts[v]} {v}" for v in _VERDICTS if counts.get(v)
+    summary = Text(f"{len(results)} traces: ")
+    summary.append_text(
+        Text(", ").join(
+            Text(f"{counts[v]} {v}", style=_VERDICT_STYLES[v]) for v in _VERDICTS if counts.get(v)
+        )
     )
 
     if format_ == "table":
-        table = Table("trace_id", "domain", "verdict", "p_success", "top reason")
+        # Cells are `Text`, never markup: a bracket in a trace id or a reason
+        # prints as written.
+        table = Table(
+            "trace_id",
+            "domain",
+            "verdict",
+            Column("p_success", justify="right"),
+            "top reason",
+        )
         for r in results:
             p_text = "" if r.p_success is None else f"{r.p_success:.2f}"
             top_reason = r.reasons[0].detail if r.reasons else ""
-            table.add_row(r.trace_id, r.domain, r.verdict, p_text, top_reason)
+            table.add_row(
+                Text(r.trace_id),
+                Text(r.domain),
+                Text(r.verdict, style=_VERDICT_STYLES.get(r.verdict, "")),
+                Text(p_text),
+                Text(top_reason),
+            )
         console.print(table)
         console.print(summary)
     elif format_ == "jsonl":
