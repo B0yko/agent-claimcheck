@@ -449,12 +449,22 @@ def _parse_and_abstain_rates(
 
 
 def _cheapest_judge_model(run_meta: Mapping[str, Any]) -> str | None:
+    """The judge the budget treats as cheapest: by worst-case endpoint price
+    (`max_price_in_per_m`/`max_price_out_per_m`), the price reservations and
+    the ablation judge choice are actually made at (see
+    docs/adr/0005-evaluation-protocol.md), not by list price. The two can
+    rank models differently, so a run's `--ablation-judge` is not
+    necessarily the model with the lowest list price. Falls back to list
+    price for `run.json` files that recorded no max price.
+    """
     judges = run_meta.get("judges") or []
     if not judges:
         return None
 
     def _price(j: Mapping[str, Any]) -> float:
-        return float(j.get("price_in_per_m", 0.0)) + float(j.get("price_out_per_m", 0.0))
+        price_in = j.get("max_price_in_per_m", j.get("price_in_per_m", 0.0))
+        price_out = j.get("max_price_out_per_m", j.get("price_out_per_m", 0.0))
+        return float(price_in) + float(price_out)
 
     return str(min(judges, key=_price)["id"])
 
@@ -611,9 +621,12 @@ def build_report(recorded_dir: str | Path) -> tuple[dict[str, Any], str]:
     h4: dict[str, Any]
     cascade_decided_by: dict[str, str] = {}
 
+    judge_test_coverage: int | None = None
     if judge_present:
         for key in sorted(k for k in judge_rows if _judge_key_is_primary(k)):
             test_rows = [r for r in judge_rows[key] if r["split"] == "test"]
+            if judge_test_coverage is None:
+                judge_test_coverage = len(test_rows)
             latency_by_trace = {r["trace_id"]: r["latency_ms"] for r in judge_rows[key]}
             cost_by_trace = {r["trace_id"]: r["cost_usd"] for r in judge_rows[key]}
             wall_s_per_1k = _judge_wall_s_per_1k(key, judge_rows[key], rec.run_meta)
@@ -680,7 +693,26 @@ def build_report(recorded_dir: str | Path) -> tuple[dict[str, Any], str]:
     n_train = len(rules_train)
     n_test = len(rules_test)
     n_false_test = sum(1 for r in rules_test if r["outcome"] == "failure")
+    n_false_total = n_false_test + sum(1 for r in rules_train if r["outcome"] == "failure")
     test_sha = str(rec.run_meta.get("dataset_sha256", ""))[:12]
+
+    judge_coverage_note: str | None = None
+    if judge_present and judge_test_coverage is not None and judge_test_coverage < n_test:
+        judge_coverage_note = (
+            f"judge-dependent rows (`judge:*`, `cascade`) cover only {judge_test_coverage} "
+            f"of {n_test} test traces in this run; their denominators above are not the "
+            "usual 48/72."
+        )
+
+    recorded_run = {
+        "command": rec.run_meta.get("command", ""),
+        "date": rec.run_meta.get("date", ""),
+        "hardware": rec.run_meta.get("hardware", ""),
+        "concurrency": rec.run_meta.get("concurrency"),
+        "judge_calls": len(rec.judge_records),
+        "total_spend_usd": float(rec.run_meta.get("total_spend_usd", 0.0)),
+        "judges": rec.run_meta.get("judges") or [],
+    }
 
     bench_json: dict[str, Any] = {
         "dataset": {
@@ -688,12 +720,15 @@ def build_report(recorded_dir: str | Path) -> tuple[dict[str, Any], str]:
             "n_train": n_train,
             "n_test": n_test,
             "n_false_test": n_false_test,
+            "n_false_total": n_false_total,
             "n_domains": len(DOMAINS),
             "n_false_kinds": len(FALSE_KINDS),
             "seed": DATASET_SEED,
             "test_sha256_short": test_sha,
         },
+        "recorded_run": recorded_run,
         "detectors": detectors,
+        "judge_coverage_note": judge_coverage_note,
         "recall_by_kind": recall_by_kind,
         "evidence_breakdown": evidence_breakdown,
         "lodo": lodo,
@@ -728,7 +763,16 @@ def _fmt_money(x: float) -> str:
     return f"${x:.3f}"
 
 
-def _fmt_ms(x: float) -> str:
+def _fmt_readable(x: float) -> str:
+    """`0` below 1 (a sub-millisecond offline detector, or a negligible
+    wall-clock/cost rate), 2 decimals below 10 so a real but small number
+    stays legible, an integer at 10 and above so a judge's multi-hundred
+    figure does not carry two meaningless decimal digits.
+    """
+    if x < 1:
+        return "0"
+    if x < 10:
+        return f"{x:.2f}"
     return f"{round(x)}"
 
 
@@ -750,8 +794,8 @@ def _table_b_row(name: str, stats: dict[str, Any]) -> str:
         f"| {name} | {_fmt_pct(d['coverage'])} | {_fmt_pct(d['accuracy_on_decided'])} | "
         f"{d['caught']}/{d['n_failure']} | {d['missed']}/{d['n_failure']} | "
         f"{d['false_alarms']}/{d['n_success']} | {d['sent_to_review']} | "
-        f"{_fmt_money(stats['usd_per_1k'])} | {stats['wall_s_per_1k']:.2f} | "
-        f"{_fmt_ms(stats['p50_ms'])} | {_fmt_ms(stats['p95_ms'])} |"
+        f"{_fmt_money(stats['usd_per_1k'])} | {_fmt_readable(stats['wall_s_per_1k'])} | "
+        f"{_fmt_readable(stats['p50_ms'])} | {_fmt_readable(stats['p95_ms'])} |"
     )
 
 
@@ -771,80 +815,82 @@ def _confusion_block(name: str, confusion: Mapping[str, Mapping[str, int]]) -> l
     return lines
 
 
-def _findings_paragraph(bench_json: dict[str, Any]) -> str:
-    detectors = bench_json["detectors"]
-    rules = detectors["rules"]
-    classifier = detectors["classifier-lr"]
-    cascade_offline = detectors["cascade-offline"]
+def _support(entry: Mapping[str, Any]) -> str:
+    if "detail" in entry and entry["detail"] == "n/a (offline run)":
+        return "n/a (offline run)"
+    return "supported" if entry["supported"] else "not supported"
 
-    sentences = [
-        "The rule packs and the synthetic generator share an author, so the rules row above is "
-        "an optimistic upper bound on a hand-written rule set's performance, not an independent "
-        "result.",
-        "classifier-lr is trained on the same generator's distribution as the traces it is "
-        "scored on here; the leave-one-domain-out table below is the more honest read of how it "
-        "generalises.",
+
+def _h1_line(h1: Mapping[str, Any], detectors: Mapping[str, dict[str, Any]]) -> str:
+    header = "- H1 (rules: fewest missed, lowest coverage)"
+    if "missed" not in h1:
+        return f"{header}: **{_support(h1)}** ({h1.get('detail', '')})."
+
+    missed, coverage = h1["missed"], h1["coverage"]
+
+    def _denom(key: str) -> int:
+        return int(detectors[key]["decisions"]["n_failure"])
+
+    fewest_key = min(sorted(missed), key=lambda k: missed[k])
+    lowest_key = min(sorted(coverage), key=lambda k: coverage[k])
+
+    fewest_text = f"{fewest_key} ({missed[fewest_key]}/{_denom(fewest_key)})"
+    if fewest_key != "rules":
+        fewest_text += f" vs rules {missed['rules']}/{_denom('rules')}"
+
+    lowest_text = f"{lowest_key} {_fmt_pct(coverage[lowest_key])}"
+    if lowest_key != "rules":
+        lowest_text += f" (rules {_fmt_pct(coverage['rules'])})"
+
+    return (
+        f"{header}: **{_support(h1)}**: fewest missed = {fewest_text}; "
+        f"lowest coverage = {lowest_text}."
+    )
+
+
+def _h2_line(h2: Mapping[str, Any]) -> str:
+    header = "- H2 (raw judge extremes + Platt lowers ECE)"
+    if "judges" not in h2:
+        return f"{header}: **{_support(h2)}**."
+    parts = [
+        f"{key}: extremes raw {_fmt_pct(row['extremes_raw'])}, ECE raw "
+        f"{_fmt3(row['ece_raw'])} → calibrated {_fmt3(row['ece_calibrated'])}"
+        for key, row in sorted(h2["judges"].items())
     ]
+    return f"{header}: **{_support(h2)}**: " + "; ".join(parts) + "."
 
-    rules_missed, classifier_missed = (
-        rules["decisions"]["missed"],
-        classifier["decisions"]["missed"],
+
+def _h3_line(h3: Mapping[str, Any]) -> str:
+    header = "- H3 (classifier-lr loses AUROC LODO)"
+    parts = []
+    for domain in DOMAINS:
+        row = h3["domains"].get(domain)
+        if row is None:
+            continue
+        lodo = row["lodo_auroc"]
+        shipped = row["shipped_auroc"]
+        lodo_text = f"{lodo:.3f}" if lodo is not None else "n/a"
+        shipped_text = f"{shipped:.3f}" if shipped is not None else "n/a"
+        parts.append(f"{domain} LODO {lodo_text} vs shipped {shipped_text}")
+    return f"{header}: **{_support(h3)}**: " + "; ".join(parts) + "."
+
+
+def _h4_line(h4: Mapping[str, Any]) -> str:
+    header = "- H4 (a judge is fooled by reviewer-directed text)"
+    if "judges" not in h4:
+        return f"{header}: **{_support(h4)}**."
+    parts = []
+    for key, row in sorted(h4["judges"].items()):
+        ri = row["reviewer_injection_recall"]
+        other = row["other_mean_recall"]
+        ri_text = _fmt_pct(ri) if ri is not None else "n/a"
+        other_text = _fmt_pct(other) if other is not None else "n/a"
+        parts.append(f"{key}: reviewer_injection recall {ri_text} vs other-kind mean {other_text}")
+    return (
+        f"{header}: **{_support(h4)}** (all 300 traces, raw outputs through the gate): "
+        + "; ".join(parts)
+        + "."
     )
-    rules_coverage = _fmt_pct(rules["decisions"]["coverage"])
-    classifier_coverage = _fmt_pct(classifier["decisions"]["coverage"])
-    sentences.append(
-        f"rules misses {rules_missed} false successes at {rules_coverage} coverage, and "
-        f"classifier-lr misses {classifier_missed} at {classifier_coverage} coverage: rules trades "
-        "coverage for a lower miss count and does not resolve every trace on its own."
-    )
-
-    rules_ci, classifier_ci = rules["auroc"], classifier["auroc"]
-    if rules_ci and classifier_ci:
-        overlap = not (
-            rules_ci["ci_high"] < classifier_ci["ci_low"]
-            or classifier_ci["ci_high"] < rules_ci["ci_low"]
-        )
-        rules_auroc_text = _fmt_auroc(rules_ci)
-        classifier_auroc_text = _fmt_auroc(classifier_ci)
-        auroc_pair = (
-            f"rules AUROC {rules_auroc_text} and classifier-lr AUROC {classifier_auroc_text}"
-        )
-        if overlap:
-            sentences.append(
-                f"{auroc_pair} have overlapping 95% confidence intervals, so this run does not "
-                "call a discrimination winner between them; coverage and the missed count above "
-                "are where they differ."
-            )
-        else:
-            better = "rules" if rules_ci["value"] > classifier_ci["value"] else "classifier-lr"
-            sentences.append(
-                f"{auroc_pair} do not overlap at the 95% level; {better} discriminates better on "
-                "this split."
-            )
-
-    trust_agent = detectors.get("trust-agent")
-    if trust_agent is not None:
-        sentences.append(
-            "trust-agent, which always believes the agent's own claim, misses all "
-            f"{trust_agent['decisions']['missed']} false successes in the test split by "
-            "construction; that is the baseline every other row here has to beat."
-        )
-
-    cascade_coverage = _fmt_pct(cascade_offline["decisions"]["coverage"])
-    sentences.append(
-        "cascade-offline (rules when conclusive, classifier-lr otherwise) misses "
-        f"{cascade_offline['decisions']['missed']} false successes at {cascade_coverage} "
-        "coverage, combining rules' catches with the classifier's coverage on what rules leaves "
-        "unresolved."
-    )
-
-    if bench_json["ablation"] is None:
-        sentences.append(
-            "Judge detectors, the prompt ablation and H2/H4 are not evaluated in this offline-only "
-            "report; they need a live judge run."
-        )
-
-    return " ".join(sentences)
 
 
 def _render_markdown(bench_json: dict[str, Any]) -> str:
@@ -853,11 +899,29 @@ def _render_markdown(bench_json: dict[str, Any]) -> str:
 
     lines.append(
         f"{d['n_total']} traces ({d['n_train']} train / {d['n_test']} test), "
-        f"{d['n_false_test']} false successes in test, {d['n_domains']} domains, "
-        f"{d['n_false_kinds']} false-success kinds, seed {d['seed']}, test sha256 "
-        f"`{d['test_sha256_short']}`."
+        f"{d['n_false_total']} false successes ({d['n_false_test']} in test), "
+        f"{d['n_domains']} domains, {d['n_false_kinds']} false-success kinds, seed {d['seed']}, "
+        f"test sha256 `{d['test_sha256_short']}`."
     )
     lines.append("")
+
+    rr = bench_json["recorded_run"]
+    lines.append(
+        f"Recorded run: `{rr['command']}` on {rr['date']}, {rr['hardware']}, "
+        f"concurrency {rr['concurrency']}, {rr['judge_calls']} judge calls, "
+        f"total spend ${rr['total_spend_usd']:.4f}."
+    )
+    lines.append("")
+    if rr["judges"]:
+        lines.append("| judge | price in $/M | price out $/M | price date |")
+        lines.append("|---|---|---|---|")
+        for j in rr["judges"]:
+            lines.append(
+                f"| {j['id']} | {_fmt_money(float(j.get('price_in_per_m', 0.0)))} | "
+                f"{_fmt_money(float(j.get('price_out_per_m', 0.0)))} | "
+                f"{j.get('price_date', '')} |"
+            )
+        lines.append("")
 
     lines.append("### Table A: discrimination and calibration (test split)")
     lines.append("")
@@ -879,6 +943,8 @@ def _render_markdown(bench_json: dict[str, Any]) -> str:
     lines.append("|---|---|---|---|---|---|---|---|---|---|---|")
     for key, stats in bench_json["detectors"].items():
         lines.append(_table_b_row(key, stats))
+    if bench_json["judge_coverage_note"] is not None:
+        lines.append(bench_json["judge_coverage_note"])
     lines.append("")
 
     lines.append("### Recall by false-success kind (caught/total)")
@@ -976,23 +1042,14 @@ def _render_markdown(bench_json: dict[str, Any]) -> str:
     lines.append("")
 
     h = bench_json["hypotheses"]
-
-    def _support(entry: Mapping[str, Any]) -> str:
-        if "detail" in entry and entry["detail"] == "n/a (offline run)":
-            return "n/a (offline run)"
-        return "supported" if entry["supported"] else "not supported"
+    detectors = bench_json["detectors"]
 
     lines.append("### Hypotheses")
     lines.append("")
-    lines.append(f"- H1 (rules: fewest missed, lowest coverage): **{_support(h['h1'])}**.")
-    lines.append(f"- H2 (raw judge extremes + Platt lowers ECE): **{_support(h['h2'])}**.")
-    lines.append(f"- H3 (classifier-lr loses AUROC LODO): **{_support(h['h3'])}**.")
-    lines.append(f"- H4 (a judge is fooled by reviewer-directed text): **{_support(h['h4'])}**.")
-    lines.append("")
-
-    lines.append("### Findings")
-    lines.append("")
-    lines.append(_findings_paragraph(bench_json))
+    lines.append(_h1_line(h["h1"], detectors))
+    lines.append(_h2_line(h["h2"]))
+    lines.append(_h3_line(h["h3"]))
+    lines.append(_h4_line(h["h4"]))
     lines.append("")
 
     return "\n".join(lines)

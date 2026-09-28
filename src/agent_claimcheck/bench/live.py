@@ -105,6 +105,34 @@ def _dump_json(obj: Any, path: Path) -> None:
     path.write_text(json.dumps(obj, indent=2, sort_keys=True, ensure_ascii=False) + "\n", "utf-8")
 
 
+def _sanitize_command_paths(command: str) -> str:
+    """Rewrite every absolute-path token in `command` (as recorded in
+    `run.json`) so it carries no other user's home directory or machine
+    layout: a path under the current directory becomes relative to it, a
+    path under the home directory is shortened to `~/...`, and anything
+    else (already relative, or outside both) is left untouched.
+    """
+    cwd = Path.cwd()
+    home = Path.home()
+    tokens = []
+    for token in command.split(" "):
+        if token.startswith("/"):
+            candidate = Path(token)
+            try:
+                tokens.append(str(candidate.relative_to(cwd)))
+                continue
+            except ValueError:
+                pass
+            try:
+                rel_home = candidate.relative_to(home)
+                tokens.append("~" if str(rel_home) == "." else f"~/{rel_home}")
+                continue
+            except ValueError:
+                pass
+        tokens.append(token)
+    return " ".join(tokens)
+
+
 def _prepare_items(traces: Sequence[Trace], split: str, extractor: ClaimExtractor) -> list[_Item]:
     items: list[_Item] = []
     for t in traces:
@@ -367,6 +395,7 @@ def run_live(
 
         for item, output in zip(items, outputs, strict=True):
             body = render_request(item.view, run.prompt, run.spec)
+            details = output.details
             records.append(
                 {
                     "trace_id": item.trace_id,
@@ -374,14 +403,20 @@ def run_live(
                     "detector": run.key,
                     "model": run.model,
                     "prompt_name": run.prompt.name,
+                    "prompt_version": run.prompt.version,
                     "prompt_sha256": run.prompt.sha256,
                     "request_sha256": request_sha256(body),
+                    "parsed": details.get("parsed"),
                     "p_raw": output.p_success,
                     "abstain": output.abstain,
                     "abstain_reason": output.abstain_reason,
+                    "raw_text": details.get("raw_response"),
+                    "usage": details.get("usage", {}),
                     "cost_usd": output.cost_usd,
                     "latency_ms": output.latency_ms,
                     "cached": output.cached,
+                    "attempts": details.get("attempts", 0),
+                    "invalid_citation": details.get("invalid_citation", False),
                 }
             )
 
@@ -426,7 +461,7 @@ def run_live(
     budget_exhausted = any(r["abstain_reason"] == "budget_exhausted" for r in records)
 
     run_meta = {
-        "command": command,
+        "command": _sanitize_command_paths(command),
         "date": date,
         "hardware": hardware,
         "concurrency": concurrency,

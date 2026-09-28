@@ -262,6 +262,48 @@ def test_live_mini_run_writes_every_file_and_leaks_no_key(fake_server: int, tmp_
         "judge:test/judge-a:claim-by-claim",
     }
     assert all(r["cached"] is False for r in records)  # live never reads the cache
+
+    # Every record carries the full recorded shape the README's evaluation
+    # section relies on: not just the raw score, but the parsed judgment,
+    # the raw response text and provider usage, so `report.py` and any
+    # downstream audit can work from `judge-records.jsonl` alone.
+    for r in records:
+        assert set(r) == {
+            "detector",
+            "model",
+            "prompt_name",
+            "prompt_version",
+            "prompt_sha256",
+            "request_sha256",
+            "trace_id",
+            "split",
+            "parsed",
+            "p_raw",
+            "abstain",
+            "abstain_reason",
+            "raw_text",
+            "usage",
+            "cost_usd",
+            "latency_ms",
+            "cached",
+            "attempts",
+            "invalid_citation",
+        }
+        assert r["prompt_version"]
+        assert r["abstain"] is False
+        assert r["parsed"] is not None
+        assert set(r["parsed"]) >= {"p_success", "failure_kind", "evidence_steps", "rationale"}
+        assert r["parsed"]["p_success"] == r["p_raw"]
+        assert isinstance(r["raw_text"], str) and r["raw_text"]
+        assert json.loads(r["raw_text"])["p_success"] == r["p_raw"]  # the message content alone
+        assert r["usage"] == {"prompt_tokens": 20, "completion_tokens": 8, "cost": 0.00015}
+        assert r["attempts"] == 1
+        assert r["invalid_citation"] is False
+        # no request body or header ever leaks into a record.
+        assert "headers" not in r
+        assert "body" not in r
+        assert "messages" not in r
+
     assert summary.calls == 18
     assert summary.cached == 0
     assert summary.total_actual_usd == pytest.approx(18 * 0.00015)
@@ -289,6 +331,125 @@ def test_live_mini_run_writes_every_file_and_leaks_no_key(fake_server: int, tmp_
     assert len(ledger_text.strip().splitlines()) == 18
     for header in _FakeORHandler.api_keys_seen:
         assert header == f"Bearer {secret}"  # the server did receive it; files never do
+
+
+def test_sanitize_command_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from agent_claimcheck.bench.live import _sanitize_command_paths
+
+    home = tmp_path / "home"
+    cwd = home / "project"
+    cwd.mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.chdir(cwd)
+
+    in_cwd = cwd / "results" / "run1"
+    assert _sanitize_command_paths(f"agent-claimcheck bench --live --out {in_cwd}") == (
+        "agent-claimcheck bench --live --out results/run1"
+    )
+
+    in_home_only = home / "scratch" / "runs" / "smoke1"
+    sanitized = _sanitize_command_paths(f"agent-claimcheck bench --live --out {in_home_only}")
+    assert str(home) not in sanitized
+    assert sanitized == "agent-claimcheck bench --live --out ~/scratch/runs/smoke1"
+
+    already_relative = "agent-claimcheck bench --live --out results/run1 --judges m1,m2"
+    assert _sanitize_command_paths(already_relative) == already_relative
+
+    outside = tmp_path / "elsewhere" / "data"
+    command_outside = f"agent-claimcheck bench --live --out {outside}"
+    assert _sanitize_command_paths(command_outside) == command_outside  # left untouched
+
+
+def test_run_live_sanitizes_command_path_in_run_json(
+    fake_server: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    port = fake_server
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    out_dir = home / "results" / "t9"
+    train = load_traces("bench:train")
+    test = load_traces("bench:test")
+    command = f"agent-claimcheck bench --live --out {out_dir}"
+
+    run_live(
+        train,
+        test,
+        out_dir,
+        judges=[MODEL_A],
+        ablation_judge=MODEL_A,
+        ablation_prompt="claim-by-claim",
+        run_name="t9",
+        max_usd=5.0,
+        concurrency=1,
+        limit=2,
+        allow_partial=False,
+        base_url=f"http://127.0.0.1:{port}/v1",
+        api_key="k",
+        price_override=None,
+        timeout_s=5.0,
+        ledger_path=tmp_path / "ledger.jsonl",
+        ledger_cap_usd=None,
+        cache_dir=tmp_path / "cache",
+        command=command,
+        date="2026-09-28",
+        hardware="test-harness",
+        package_version="0.0.0-test",
+        dataset_sha256="a" * 64,
+    )
+
+    run_meta = json.loads((out_dir / "run.json").read_text(encoding="utf-8"))
+    assert str(home) not in run_meta["command"]
+    assert run_meta["command"] == "agent-claimcheck bench --live --out ~/results/t9"
+
+
+def test_limited_live_run_notes_partial_judge_coverage(fake_server: int, tmp_path: Path) -> None:
+    """`--limit` smoke runs score only a handful of traces per judge, far
+    short of the full 120-trace test split; `cascade`'s and each judge's
+    Table B denominators then no longer read 48/72, and `build_report` must
+    say so instead of presenting them as if they were the full split.
+    """
+    port = fake_server
+    train = load_traces("bench:train")
+    test = load_traces("bench:test")
+    out_dir = tmp_path / "run"
+
+    run_live(
+        train,
+        test,
+        out_dir,
+        judges=[MODEL_A, MODEL_B],
+        ablation_judge=MODEL_A,
+        ablation_prompt="claim-by-claim",
+        run_name="t10",
+        max_usd=5.0,
+        concurrency=2,
+        limit=3,
+        allow_partial=False,
+        base_url=f"http://127.0.0.1:{port}/v1",
+        api_key="k",
+        price_override=None,
+        timeout_s=5.0,
+        ledger_path=tmp_path / "ledger.jsonl",
+        ledger_cap_usd=None,
+        cache_dir=tmp_path / "cache",
+        command="test",
+        date="2026-09-28",
+        hardware="test-harness",
+        package_version="0.0.0-test",
+        dataset_sha256="a" * 64,
+    )
+
+    bench_json, bench_md = build_report(out_dir)
+    n_test = bench_json["dataset"]["n_test"]
+    judge_n = bench_json["detectors"]["judge:test/judge-a"]["decisions"]["n"]
+    assert judge_n < n_test
+
+    note = bench_json["judge_coverage_note"]
+    assert note is not None
+    assert str(judge_n) in note
+    assert "judge-dependent rows" in note
+    assert note in bench_md
 
 
 def test_budget_exhaustion_mid_run_still_writes_every_file(

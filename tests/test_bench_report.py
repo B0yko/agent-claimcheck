@@ -13,6 +13,8 @@ from factory import numbers_in
 from agent_claimcheck.bench.report import (
     README_END,
     README_START,
+    _cheapest_judge_model,
+    _fmt_readable,
     _hypothesis_h4,
     build_report,
     check_readme_diff,
@@ -50,11 +52,37 @@ def test_dataset_line_counts(offline_report: tuple[dict[str, Any], str]) -> None
         "n_train": 180,
         "n_test": 120,
         "n_false_test": 48,
+        "n_false_total": 120,
         "n_domains": 3,
         "n_false_kinds": 7,
         "seed": 20260924,
         "test_sha256_short": "b" * 12,
     }
+
+
+def test_dataset_line_wording(offline_report: tuple[dict[str, Any], str]) -> None:
+    _, bench_md = offline_report
+    first_line = bench_md.splitlines()[0]
+    assert first_line == (
+        "300 traces (180 train / 120 test), 120 false successes (48 in test), "
+        "3 domains, 7 false-success kinds, seed 20260924, test sha256 `bbbbbbbbbbbb`."
+    )
+
+
+def test_recorded_run_line_and_no_judge_price_table_offline(
+    offline_report: tuple[dict[str, Any], str],
+) -> None:
+    bench_json, bench_md = offline_report
+    rr = bench_json["recorded_run"]
+    assert rr["command"] == "agent-claimcheck bench --offline --out results/test"
+    assert rr["judge_calls"] == 0
+    assert rr["judges"] == []
+    assert (
+        "Recorded run: `agent-claimcheck bench --offline --out results/test` on "
+        "2026-09-28, test-harness, concurrency 1, 0 judge calls, total spend $0.0000."
+    ) in bench_md
+    # no judges recorded offline: no price table follows the recorded-run line.
+    assert "price in $/M" not in bench_md
 
 
 def test_table_b_offline_detectors(offline_report: tuple[dict[str, Any], str]) -> None:
@@ -129,14 +157,53 @@ def test_leakage_number_is_the_frozen_constant(offline_report: tuple[dict[str, A
     assert "0.434" in bench_md
 
 
-def test_findings_numbers_all_appear_in_bench_md(
+def test_findings_section_is_removed(offline_report: tuple[dict[str, Any], str]) -> None:
+    """The generated report no longer carries a "### Findings" section (the
+    README's hand-written Findings section is the only one); the Hypotheses
+    section is what remains, and it must not be empty.
+    """
+    _, bench_md = offline_report
+    assert "### Findings" not in bench_md
+    assert "### Hypotheses" in bench_md
+
+
+def test_h1_line_states_the_deciding_numbers(
     offline_report: tuple[dict[str, Any], str],
 ) -> None:
+    bench_json, bench_md = offline_report
+    h1 = bench_json["hypotheses"]["h1"]
+    line = next(line for line in bench_md.splitlines() if line.startswith("- H1"))
+
+    fewest_key = min(sorted(h1["missed"]), key=lambda k: h1["missed"][k])
+    lowest_key = min(sorted(h1["coverage"]), key=lambda k: h1["coverage"][k])
+    assert fewest_key in line
+    assert f"{h1['missed'][fewest_key]}/48" in line
+    assert f"{h1['missed']['rules']}/48" in line
+    assert lowest_key in line
+    for number in numbers_in(line):
+        # every number H1 states is backed by Table A/B above it.
+        before = bench_md.split("- H1")[0]
+        assert number in before, f"{number!r} in the H1 line is not backed by a table"
+
+
+def test_h3_line_states_lodo_vs_shipped_per_domain(
+    offline_report: tuple[dict[str, Any], str],
+) -> None:
+    bench_json, bench_md = offline_report
+    h3 = bench_json["hypotheses"]["h3"]
+    line = next(line for line in bench_md.splitlines() if line.startswith("- H3"))
+    for domain, row in h3["domains"].items():
+        assert domain in line
+        assert f"{row['lodo_auroc']:.3f}" in line
+        assert f"{row['shipped_auroc']:.3f}" in line
+
+
+def test_h2_and_h4_lines_are_na_offline(offline_report: tuple[dict[str, Any], str]) -> None:
     _, bench_md = offline_report
-    findings = bench_md.split("### Findings")[1]
-    before_findings = bench_md.split("### Findings")[0]
-    for number in numbers_in(findings):
-        assert number in before_findings, f"{number!r} in Findings is not backed by a table"
+    h2_line = next(line for line in bench_md.splitlines() if line.startswith("- H2"))
+    h4_line = next(line for line in bench_md.splitlines() if line.startswith("- H4"))
+    assert "n/a (offline run)" in h2_line
+    assert "n/a (offline run)" in h4_line
 
 
 def test_verify_judge_requests_empty_without_judge_records(offline_recorded_dir: Path) -> None:
@@ -475,6 +542,65 @@ def test_ablation_picks_the_cheapest_judge_model(judge_report: tuple[dict[str, A
     assert "claim-audit" in ablation and "claim-by-claim" in ablation
 
 
+def test_cheapest_judge_model_uses_worst_case_price_not_list_price() -> None:
+    """The budget reserves and the ablation judge choice are both made at
+    each endpoint's worst-case price (see docs/adr/0005-evaluation-protocol.md),
+    which can rank models differently than their list price. Reproduces the
+    real smoke1 recording: `deepseek-v4-flash` has the lower list price sum
+    (0.219) but the higher worst-case price sum (1.49); `mistral-small` is
+    the reverse (0.344 list, 0.400 worst-case) and is the one actually
+    cheapest at the price the budget enforces.
+    """
+    run_meta = {
+        "judges": [
+            {
+                "id": "deepseek/deepseek-v4-flash",
+                "price_in_per_m": 0.07308,
+                "price_out_per_m": 0.14616,
+                "max_price_in_per_m": 0.21,
+                "max_price_out_per_m": 1.28,
+            },
+            {
+                "id": "mistralai/mistral-small-3.2-24b-instruct",
+                "price_in_per_m": 0.09375,
+                "price_out_per_m": 0.25,
+                "max_price_in_per_m": 0.09999999999999999,
+                "max_price_out_per_m": 0.3,
+            },
+            {
+                "id": "qwen/qwen3-235b-a22b-2507",
+                "price_in_per_m": 0.0875,
+                "price_out_per_m": 0.35,
+                "max_price_in_per_m": 0.25,
+                "max_price_out_per_m": 1.0,
+            },
+        ]
+    }
+    assert _cheapest_judge_model(run_meta) == "mistralai/mistral-small-3.2-24b-instruct"
+
+
+def test_cheapest_judge_model_falls_back_to_list_price_without_max_price() -> None:
+    run_meta = {
+        "judges": [
+            {"id": "a", "price_in_per_m": 0.5, "price_out_per_m": 0.5},
+            {"id": "b", "price_in_per_m": 0.1, "price_out_per_m": 0.1},
+        ]
+    }
+    assert _cheapest_judge_model(run_meta) == "b"
+
+
+def test_fmt_readable_tiers() -> None:
+    assert _fmt_readable(0.0) == "0"
+    assert _fmt_readable(0.128) == "0"  # sub-millisecond offline detector
+    assert _fmt_readable(0.999) == "0"
+    assert _fmt_readable(1.0) == "1.00"
+    assert _fmt_readable(5.5) == "5.50"
+    assert _fmt_readable(9.999) == "10.00"
+    assert _fmt_readable(10.0) == "10"
+    assert _fmt_readable(655.0818) == "655"
+    assert _fmt_readable(1165.39) == "1165"
+
+
 def test_parse_error_rates_present_per_judge(judge_report: tuple[dict[str, Any], str]) -> None:
     bench_json, _ = judge_report
     rates = bench_json["parse_error_rates"]
@@ -493,15 +619,50 @@ def test_recall_by_kind_includes_judges_and_cascade(
     assert recall["judge:fake/vendor-a"]["reviewer_injection"]["caught"] == 0
 
 
-def test_judge_findings_numbers_appear_in_bench_md(
+def test_recorded_run_line_and_judge_price_table(
     judge_report: tuple[dict[str, Any], str],
 ) -> None:
     bench_json, bench_md = judge_report
+    rr = bench_json["recorded_run"]
+    assert rr["judge_calls"] > 0
+    assert len(rr["judges"]) == 3
+    assert f"{rr['judge_calls']} judge calls" in bench_md
+    assert "| judge | price in $/M | price out $/M | price date |" in bench_md
+    for judge in rr["judges"]:
+        assert f"| {judge['id']} |" in bench_md
+
+
+def test_judge_findings_section_is_removed(judge_report: tuple[dict[str, Any], str]) -> None:
+    bench_json, bench_md = judge_report
     assert bench_json["ablation"] is not None
-    findings = bench_md.split("### Findings")[1]
-    before_findings = bench_md.split("### Findings")[0]
-    for number in numbers_in(findings):
-        assert number in before_findings
+    assert "### Findings" not in bench_md
+
+
+def test_h2_line_states_extremes_and_ece_per_judge(
+    judge_report: tuple[dict[str, Any], str],
+) -> None:
+    bench_json, bench_md = judge_report
+    h2 = bench_json["hypotheses"]["h2"]
+    line = next(line for line in bench_md.splitlines() if line.startswith("- H2"))
+    for key, row in h2["judges"].items():
+        assert key in line
+        assert f"{row['ece_raw']:.3f}" in line
+        assert f"{row['ece_calibrated']:.3f}" in line
+
+
+def test_h4_line_states_recall_percentages_per_judge(
+    judge_report: tuple[dict[str, Any], str],
+) -> None:
+    bench_json, bench_md = judge_report
+    h4 = bench_json["hypotheses"]["h4"]
+    line = next(line for line in bench_md.splitlines() if line.startswith("- H4"))
+    assert "all 300 traces" in line
+    for key, row in h4["judges"].items():
+        assert key in line
+        if row["reviewer_injection_recall"] is not None:
+            assert f"{row['reviewer_injection_recall'] * 100:.1f}%" in line
+        if row["other_mean_recall"] is not None:
+            assert f"{row['other_mean_recall'] * 100:.1f}%" in line
 
 
 def test_leakage_constant_matches_the_dataset_card() -> None:
