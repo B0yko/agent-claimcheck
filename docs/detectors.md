@@ -207,7 +207,13 @@ a fresh call) but still writes to it.
 settlement; `max_price` (the highest price across that model's live
 `/models/{author}/{slug}/endpoints`) sizes the conservative pre-call
 reservation. An unknown model raises `UnknownPriceError` — a live run never
-silently prices a call at zero.
+silently prices a call at zero. `JudgeDetector` turns that into an
+`unknown_price` abstention on each trace, which is the right behaviour for a
+library caller; `agent-claimcheck check` instead refuses the whole run up
+front (exit 2, one error line) when the `judge` or `cascade` detector has no
+price from `--price-in`/`--price-out` (both or neither, USD per million
+tokens), `[judge] price_in_per_m`/`price_out_per_m`, or the listing, in that
+order. In Python, `Checker.require_price()` does the same check on demand.
 
 Before every live call, `Budget.reserve` holds a conservative estimate
 (`reservation_usd`: request bytes ÷ 2.5 as a proxy token count for the
@@ -243,8 +249,10 @@ Every failure is reported as one of a fixed set of codes —
 `invalid_response` — never as the underlying exception's message, the
 response body, or its headers, in the `DetectorOutput`, the ledger, or any
 log line. The full `abstain_reason` vocabulary a judge can report is:
-`no_api_key`, `budget_exhausted`, `ledger_cap`, `parse_error`, and the six
-client codes above.
+`no_api_key`, `unknown_price`, `budget_exhausted`, `ledger_cap`,
+`parse_error`, and the six client codes above. `unknown_price` means the
+model has no price from any source (see `PriceBook` above), so the call was
+refused before it left the machine.
 
 **API key resolution**: `CLAIMCHECK_API_KEY`, else `OPENROUTER_API_KEY`
 when, and only when, `base_url`'s host is exactly `openrouter.ai`. The

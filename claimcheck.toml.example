@@ -18,8 +18,8 @@ max_tokens = 400      # max completion tokens per judge call
 json_mode = true      # request response_format: {"type": "json_object"}
 timeout_s = 60.0      # HTTP timeout per judge call, in seconds
 concurrency = 8       # worker threads used to score traces concurrently
-# price_in_per_m = 0.14   # override price per million input tokens; unset resolves from OpenRouter's /models listing
-# price_out_per_m = 0.28  # override price per million output tokens; unset resolves from OpenRouter's /models listing
+# price_in_per_m = 0.14   # price per million input tokens (--price-in wins); unset resolves from OpenRouter's /models listing
+# price_out_per_m = 0.28  # price per million output tokens (--price-out wins); with no price from any source `check` refuses to run the judge
 
 [budget]
 max_usd = 1.0  # a live judge run stops cleanly before this cumulative cost is exceeded

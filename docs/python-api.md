@@ -28,9 +28,15 @@ Checker(
     calibration=None,  # a CalibratorSet, a path to one, or None for the built-in set
     thresholds=None,  # a gate.Thresholds, or None for the config's/defaults'
     max_usd=None,  # live judge budget cap; None uses the config's
+    price=None,  # a ledger.Price(price_in_per_m, price_out_per_m) for the judge; beats the config's
     concurrency=None,  # thread pool size for a concurrent detector; None uses the config's
 )
 ```
+
+`checker.require_price()` raises `UnknownPriceError` when the detector calls the judge and
+its model has no known price (`price`, then the config's `price_in_per_m`/`price_out_per_m`,
+then the API's model listing); without it, the judge abstains `unknown_price` trace by
+trace. It does nothing for a detector that never calls the judge.
 
 `Checker.from_config(path)` reads a `claimcheck.toml` file and builds a `Checker` from
 it (see `docs/rules.md`/`docs/detectors.md` for what each config section controls).

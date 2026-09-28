@@ -591,3 +591,157 @@ def test_check_judge_reuses_the_cache_unless_no_cache(
         assert third["cached"] is False
     finally:
         server.shutdown()
+
+
+# ------------------------------------------------------------ judge pricing --
+
+
+class _CountingHandler(BaseHTTPRequestHandler):
+    """Serves `/models` (ids in `listed`, $1/M both ways) and counts completions."""
+
+    listed: tuple[str, ...] = ()
+    usage: dict[str, Any] = {"prompt_tokens": 100_000, "completion_tokens": 0}
+    posts = 0
+
+    def _send(self, payload: dict[str, Any]) -> None:
+        raw = json.dumps(payload).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+    def do_GET(self) -> None:
+        if self.path.endswith("/endpoints"):
+            self._send({"data": {"endpoints": []}})
+            return
+        listing = [
+            {
+                "id": model,
+                "pricing": {"prompt": "0.000001", "completion": "0.000001"},
+                "supported_parameters": [],
+            }
+            for model in self.listed
+        ]
+        self._send({"data": listing})
+
+    def do_POST(self) -> None:
+        self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        type(self).posts += 1
+        self._send({"choices": [{"message": {"content": _VALID_CONTENT}}], "usage": self.usage})
+
+    def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
+        pass
+
+
+def _pricing_setup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    listed: tuple[str, ...],
+    config_prices: bool,
+) -> tuple[ThreadingHTTPServer, type[_CountingHandler], list[str]]:
+    handler = type("Handler", (_CountingHandler,), {"listed": listed, "posts": 0})
+    server, port = _fake_server(handler)
+    traces_path = tmp_path / "traces.jsonl"
+    _write_labelled_traces(traces_path, 1)
+    config_path = tmp_path / "claimcheck.toml"
+    config_path.write_text(
+        "[judge]\n"
+        f'base_url = "http://127.0.0.1:{port}/v1"\n'
+        'model = "test/fake-model"\n'
+        + ("price_in_per_m = 1.0\nprice_out_per_m = 1.0\n" if config_prices else ""),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CLAIMCHECK_API_KEY", "test-key")
+    monkeypatch.setenv("CLAIMCHECK_LEDGER", str(tmp_path / "ledger.jsonl"))
+    args = ["check", str(traces_path), "--config", str(config_path), "--format", "jsonl"]
+    args += ["--fail-on", "unverifiable", "--no-cache"]
+    return server, handler, args
+
+
+@pytest.mark.parametrize("detector", ["judge", "cascade"])
+def test_check_refuses_up_front_when_the_judge_has_no_known_price(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, detector: str
+) -> None:
+    server, handler, args = _pricing_setup(tmp_path, monkeypatch, listed=(), config_prices=False)
+    try:
+        result = runner.invoke(app, [*args, "--detector", detector])
+        assert result.exit_code == 2, result.output
+        assert result.stdout.strip() == ""  # no per-trace abstentions were printed
+        assert len(result.stderr.strip().splitlines()) == 1
+        assert result.stderr.startswith("error: no price known for judge model 'test/fake-model'")
+        assert "--price-in and --price-out" in result.stderr
+        assert "[judge]" in result.stderr  # not swallowed as rich markup
+        assert handler.posts == 0
+    finally:
+        server.shutdown()
+
+
+def test_check_price_flags_supply_a_missing_price(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    server, _handler, args = _pricing_setup(tmp_path, monkeypatch, listed=(), config_prices=False)
+    try:
+        result = runner.invoke(
+            app, [*args, "--detector", "judge", "--price-in", "1", "--price-out", "1"]
+        )
+        assert result.exit_code == 0, result.output
+        [row] = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
+        assert row["verdict"] == "verified"
+        assert row["abstain"] is False
+        assert row["cost_usd"] == pytest.approx(0.1)  # 100k prompt tokens at $1/M
+    finally:
+        server.shutdown()
+
+
+def test_check_price_flags_beat_the_config_price(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    server, _handler, args = _pricing_setup(tmp_path, monkeypatch, listed=(), config_prices=True)
+    try:
+        result = runner.invoke(
+            app, [*args, "--detector", "judge", "--price-in", "3", "--price-out", "3"]
+        )
+        assert result.exit_code == 0, result.output
+        [row] = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
+        assert row["cost_usd"] == pytest.approx(0.3)  # the flag's $3/M, not the config's $1/M
+    finally:
+        server.shutdown()
+
+
+def test_check_uses_the_listing_price_when_neither_flags_nor_config_set_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    server, _handler, args = _pricing_setup(
+        tmp_path, monkeypatch, listed=("test/fake-model",), config_prices=False
+    )
+    try:
+        result = runner.invoke(app, [*args, "--detector", "judge"])
+        assert result.exit_code == 0, result.output
+        [row] = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
+        assert row["cost_usd"] == pytest.approx(0.1)
+    finally:
+        server.shutdown()
+
+
+@pytest.mark.parametrize(
+    ("flags", "message"),
+    [
+        (["--price-in", "1"], "must be given together"),
+        (["--price-out", "1"], "must be given together"),
+        (["--price-in", "-1", "--price-out", "1"], "must not be negative"),
+    ],
+)
+def test_check_price_flags_are_both_or_neither(flags: list[str], message: str) -> None:
+    result = runner.invoke(app, ["check", "example:mixed", *flags])
+    assert result.exit_code == 2
+    assert message in result.stderr
+
+
+def test_check_price_flags_are_ignored_by_detectors_without_a_judge() -> None:
+    result = runner.invoke(
+        app,
+        ["check", "example:mixed", "--price-in", "1", "--price-out", "1", "--format", "jsonl"],
+    )
+    assert result.exit_code == 1  # false_success verdicts, not an input error

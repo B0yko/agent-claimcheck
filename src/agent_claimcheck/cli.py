@@ -11,6 +11,8 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from agent_claimcheck.gate import UnknownPriceError
+from agent_claimcheck.ledger import Price
 from agent_claimcheck.resources import ResourceNotFoundError
 from agent_claimcheck.schema import TraceValidationError, load_traces_report
 
@@ -235,6 +237,16 @@ def check(
     strict: bool = typer.Option(
         False, "--strict", help="Abort with exit 2 on the first invalid trace line."
     ),
+    price_in: float | None = typer.Option(
+        None,
+        "--price-in",
+        help="Judge price per million input tokens (with --price-out); beats the config.",
+    ),
+    price_out: float | None = typer.Option(
+        None,
+        "--price-out",
+        help="Judge price per million output tokens (with --price-in); beats the config.",
+    ),
 ) -> None:
     """Check success claims against trace evidence and gate each trace.
 
@@ -260,6 +272,8 @@ def check(
         )
         raise typer.Exit(code=2)
 
+    price = _price_from_flags(price_in, price_out)
+
     try:
         report = load_traces_report(input_file, strict=strict)
     except TraceValidationError as exc:
@@ -284,8 +298,15 @@ def check(
             prompt=prompt,
             calibration=calibration,
             max_usd=max_usd,
+            price=price,
             use_cache=not no_cache,
         )
+        checker.require_price()
+    except UnknownPriceError as exc:
+        # One unwrapped line; the message names a `[judge]` table, which rich
+        # would otherwise read as markup and drop.
+        error_console.print(f"error: {exc.args[0]}", markup=False, soft_wrap=True)
+        raise typer.Exit(code=2) from None
     except (OSError, ValueError, RulePackError, PromptError, ResourceNotFoundError) as exc:
         error_console.print(f"error: {exc}")
         raise typer.Exit(code=2) from None
@@ -341,6 +362,19 @@ def check(
     raise typer.Exit(code=1 if fail_on_set & set(counts) else 0)
 
 
+def _price_from_flags(price_in: float | None, price_out: float | None) -> Price | None:
+    """A `Price` from `--price-in`/`--price-out`: both or neither, never negative."""
+    if price_in is None and price_out is None:
+        return None
+    if price_in is None or price_out is None:
+        error_console.print("error: --price-in and --price-out must be given together")
+        raise typer.Exit(code=2)
+    if price_in < 0 or price_out < 0:
+        error_console.print("error: --price-in and --price-out must not be negative")
+        raise typer.Exit(code=2)
+    return Price(price_in_per_m=price_in, price_out_per_m=price_out)
+
+
 def _run_bench_live(
     *,
     judges: str | None,
@@ -376,8 +410,6 @@ def _run_bench_live(
     )
     from agent_claimcheck.config import cache_dir, load_config, resolve_api_key
     from agent_claimcheck.config import ledger_path as resolve_ledger_path
-    from agent_claimcheck.gate import UnknownPriceError
-    from agent_claimcheck.ledger import Price
     from agent_claimcheck.resources import path as resource_path
 
     missing = [
@@ -408,12 +440,7 @@ def _run_bench_live(
         error_console.print("error: --judges must name at least one model")
         raise typer.Exit(code=2)
 
-    price_override: Price | None = None
-    if price_in is not None or price_out is not None:
-        if price_in is None or price_out is None:
-            error_console.print("error: --price-in and --price-out must be given together")
-            raise typer.Exit(code=2)
-        price_override = Price(price_in_per_m=price_in, price_out_per_m=price_out)
+    price_override = _price_from_flags(price_in, price_out)
 
     cfg = load_config(None)
     base_url = cfg.judge.base_url

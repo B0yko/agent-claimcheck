@@ -6,14 +6,18 @@ import json
 import tempfile
 import threading
 from pathlib import Path
+from typing import Any
 
+import httpx
 import pytest
 from factory import probe, tool_call, tool_result, trace
 
 from agent_claimcheck.calibration import Calibrator, CalibratorSet
 from agent_claimcheck.checker import Checker, CheckResult, dump_result
+from agent_claimcheck.config import Config, JudgeConfig
 from agent_claimcheck.detectors.base import DetectorOutput, Reason, register_detector
-from agent_claimcheck.gate import Thresholds
+from agent_claimcheck.gate import Thresholds, UnknownPriceError
+from agent_claimcheck.ledger import Price
 
 
 def _booked_trace(trace_id: str, *, with_probe: bool = True) -> object:
@@ -223,3 +227,77 @@ def test_check_result_round_trips_through_dump_result() -> None:
     assert isinstance(result, CheckResult)
     line = dump_result(result)
     assert '"schema":"claimcheck-result/v1"' in line
+
+
+# ------------------------------------------------------------- judge pricing --
+
+
+def _empty_listing(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Make every `Checker`-built HTTP client see an empty `/models` listing."""
+    requested: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested.append(request.url.path)
+        return httpx.Response(200, json={"data": []})
+
+    real_client = httpx.Client
+
+    def client(**kwargs: Any) -> httpx.Client:
+        kwargs["transport"] = kwargs.get("transport") or httpx.MockTransport(handler)
+        return real_client(**kwargs)
+
+    monkeypatch.setattr("agent_claimcheck.checker.httpx.Client", client)
+    return requested
+
+
+def _judge_config(**judge: object) -> Config:
+    return Config(judge=JudgeConfig(model="test/fake-model", **judge))  # type: ignore[arg-type]
+
+
+def test_require_price_raises_when_the_judge_model_has_no_price(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requested = _empty_listing(monkeypatch)
+    checker = Checker("judge", config=_judge_config())
+    with pytest.raises(UnknownPriceError) as info:
+        checker.require_price()
+    assert "no price known for judge model 'test/fake-model'" in info.value.args[0]
+    assert requested  # the listing was consulted
+
+
+def test_require_price_passes_with_an_explicit_price_or_a_configured_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requested = _empty_listing(monkeypatch)
+    Checker("judge", config=_judge_config(), price=Price(1.0, 2.0)).require_price()
+    Checker(
+        "cascade", config=_judge_config(price_in_per_m=1.0, price_out_per_m=2.0)
+    ).require_price()
+    assert requested == []  # a known price never touches the network
+
+
+def test_an_explicit_price_beats_the_configured_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    _empty_listing(monkeypatch)
+    checker = Checker(
+        "judge",
+        config=_judge_config(price_in_per_m=1.0, price_out_per_m=1.0),
+        price=Price(5.0, 6.0),
+    )
+    assert checker._price_book is not None
+    assert checker._price_book.list_price("test/fake-model") == Price(5.0, 6.0)
+
+
+def test_require_price_is_a_no_op_for_detectors_without_a_judge() -> None:
+    Checker("rules").require_price()
+    Checker("cascade-offline").require_price()
+
+
+def test_judge_detector_still_abstains_per_trace_without_a_price(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _empty_listing(monkeypatch)
+    monkeypatch.setenv("CLAIMCHECK_API_KEY", "test-key")
+    checker = Checker("judge", config=_judge_config(), use_cache=False)
+    [result] = list(checker.check([_booked_trace("t1")]))
+    assert result.abstain_reason == "unknown_price"
+    assert result.verdict == "unverifiable"

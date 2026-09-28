@@ -36,7 +36,7 @@ from agent_claimcheck.detectors.classifier import ClassifierDetector, load_artif
 from agent_claimcheck.detectors.ensemble import CascadeDetector, CascadeOfflineDetector
 from agent_claimcheck.detectors.judge import JudgeDetector
 from agent_claimcheck.detectors.rules import RulesDetector
-from agent_claimcheck.gate import Thresholds, confidence, gate
+from agent_claimcheck.gate import Thresholds, UnknownPriceError, confidence, gate
 from agent_claimcheck.judge.cache import JudgeCache
 from agent_claimcheck.judge.render import DEFAULT_PROMPT_NAME
 from agent_claimcheck.ledger import Budget, Ledger, Price, PriceBook
@@ -129,6 +129,7 @@ class Checker:
         calibration: str | Path | CalibratorSet | None = None,
         thresholds: Thresholds | None = None,
         max_usd: float | None = None,
+        price: Price | None = None,
         concurrency: int | None = None,
         use_cache: bool = True,
     ) -> None:
@@ -158,6 +159,8 @@ class Checker:
             self.calibrators_builtin = True
 
         self.max_usd = max_usd if max_usd is not None else self.config.budget.max_usd
+        self._price_override = price
+        self._price_book: PriceBook | None = None
         self.concurrency = concurrency if concurrency is not None else self.config.judge.concurrency
         self.run_id = uuid.uuid4().hex[:12]
         self.ledger: Ledger | None = None
@@ -174,6 +177,25 @@ class Checker:
     def from_config(cls, path: str | Path, **kwargs: Any) -> Checker:
         """Build a `Checker` from a `claimcheck.toml` file."""
         return cls(config=load_config(path), **kwargs)
+
+    def require_price(self) -> None:
+        """Raise `UnknownPriceError` when this detector calls the judge and its model has no
+        known price (an explicit `price`, then the config, then the API's model listing).
+
+        `JudgeDetector` itself still abstains `unknown_price` trace by trace; a caller
+        that would rather refuse a whole run up front calls this once after building the
+        `Checker`. Detectors that never call the judge always pass.
+        """
+        if self._price_book is None:
+            return
+        model = self.config.judge.model or ""
+        try:
+            self._price_book.list_price(model)
+        except UnknownPriceError:
+            raise UnknownPriceError(
+                f"no price known for judge model {model!r}: pass --price-in and --price-out, "
+                "or set price_in_per_m and price_out_per_m under [judge]"
+            ) from None
 
     def _base_rate(self) -> float:
         return self.calibrators.base_rate if self.calibrators is not None else DEFAULT_BASE_RATE
@@ -200,12 +222,15 @@ class Checker:
         config_prices = None
         if jc.price_in_per_m is not None and jc.price_out_per_m is not None:
             config_prices = {jc.model: Price(jc.price_in_per_m, jc.price_out_per_m)}
+        price_known = config_prices is not None or self._price_override is not None
         price_book = PriceBook(
             base_url=jc.base_url,
             api_key=api_key,
             config_prices=config_prices,
-            client=None if config_prices is not None else httpx.Client(),
+            override=self._price_override,
+            client=None if price_known else httpx.Client(),
         )
+        self._price_book = price_book
         budget = Budget(max_usd=self.max_usd, ledger=ledger, cap=self.config.ledger_cap_usd)
 
         return JudgeDetector(
