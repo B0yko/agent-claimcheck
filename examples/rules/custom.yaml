@@ -1,0 +1,21 @@
+# Example: mapping your own tool names to the rule DSL.
+#
+# This pack checks an imaginary "acme" scheduling API instead of the
+# built-in `calendar.*` tools. Nothing about the DSL is specific to the
+# built-in packs: a pack applies to any trace whose tool_call names match
+# its `tools` globs.
+pack: acme
+version: 1
+tools: ["acme.schedule_meeting", "acme.notify_attendee"]
+claim_patterns:
+  meeting_booked: ['\b(booked|scheduled)\b']
+claims:
+  meeting_booked:
+    action: "acme.schedule_meeting"
+    receipt:
+      meeting_id: { exists: true }
+      starts_at: { equals: "{subject.start}", as: datetime }
+    probe: "acme.get_meeting"
+    probe_checks:
+      state: { in: [confirmed] }
+      starts_at: { equals: "{subject.start}", as: datetime }

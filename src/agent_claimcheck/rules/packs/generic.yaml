@@ -1,0 +1,5 @@
+pack: generic
+version: 1
+claim_patterns:
+  done: ['\b(done|completed|finished|all set)\b']
+claims: {}

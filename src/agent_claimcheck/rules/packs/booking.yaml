@@ -1,0 +1,25 @@
+pack: booking
+version: 1
+tools: ["calendar.*", "email.*"]
+claim_patterns:
+  booked: ['\b(booked|scheduled|confirmed)\b']
+  invite_sent: ['\binvit(e|ation)\b']
+claims:
+  booked:
+    action: "calendar.create_event"
+    receipt:
+      event_id: { exists: true }
+      start: { equals: "{subject.start}", as: datetime }
+      args.duration_min: { equals: "{subject.duration_min}", as: number }
+    probe: "calendar.get_event"
+    probe_checks:
+      status: { in: [confirmed] }
+      start: { equals: "{subject.start}", as: datetime }
+  invite_sent:
+    action: "email.send_invite"
+    receipt:
+      message_id: { exists: true }
+      args.to: { contains: "{subject.attendee_email}", as: email }
+    probe: "calendar.get_event"
+    probe_checks:
+      invites_sent: { contains: "{subject.attendee_email}", as: email }

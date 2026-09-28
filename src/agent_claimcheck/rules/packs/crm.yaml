@@ -1,0 +1,30 @@
+pack: crm
+version: 1
+tools: ["crm.*"]
+claim_patterns:
+  updated: ['\bupdat(e|ed|ing)\b']
+  note_added: ['\bnote\b.*\badded\b', '\badded\b.*\bnote\b']
+  stage_changed: ['\bstage\b', '\bmoved\b.*\bto\b']
+claims:
+  updated:
+    action: "crm.update_contact"
+    receipt:
+      record_id: { equals: "{subject.record_id}", as: string }
+      updated_fields: { exists: true }
+    probe: "crm.read_record"
+    probe_checks:
+      fields: { exists: true }
+  note_added:
+    action: "crm.add_note"
+    receipt:
+      note_id: { exists: true }
+    probe: "crm.read_record"
+    probe_checks:
+      notes: { exists: true }
+  stage_changed:
+    action: "crm.update_deal_stage"
+    receipt:
+      stage: { equals: "{subject.stage}" }
+    probe: "crm.read_record"
+    probe_checks:
+      stage: { equals: "{subject.stage}" }

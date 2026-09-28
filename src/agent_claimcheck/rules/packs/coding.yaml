@@ -1,0 +1,30 @@
+pack: coding
+version: 1
+tools: ["fs.*", "shell.*", "git.*"]
+claim_patterns:
+  tests_passed: ['\ball tests?\b.*\bpass', '\btests?\b.*\bpass(ed|ing)?\b']
+  fixed: ['\bfix(ed|es)?\b']
+  committed: ['\bcommit(ted)?\b']
+claims:
+  tests_passed:
+    action: "shell.run"
+    receipt:
+      exit_code: { equals: 0, as: number }
+    probe: "ci.run_tests"
+    probe_checks:
+      failed: { equals: 0, as: number }
+  fixed:
+    action: "fs.write_file"
+    receipt:
+      args.path: { equals: "{subject.file}" }
+      bytes_written: { exists: true }
+    probe: "ci.run_tests"
+    probe_checks:
+      failed: { equals: 0, as: number }
+  committed:
+    action: "git.commit"
+    receipt:
+      sha: { matches: "^[0-9a-f]{7}$" }
+    probe: "git.show_head"
+    probe_checks:
+      sha: { equals: "{subject.sha}" }
