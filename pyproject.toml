@@ -58,6 +58,14 @@ pattern = '!\[([^\]]*)\]\((?!https?://)([^)]+)\)'
 replacement = '![\1](https://raw.githubusercontent.com/B0yko/agent-claimcheck/v0.1.1/\2)'
 
 [[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = '(src|srcset)="(?!https?://)([^"]+)"'
+replacement = '\1="https://raw.githubusercontent.com/B0yko/agent-claimcheck/v0.1.1/\2"'
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = 'href="(?!https?://|#)([^"]+)"'
+replacement = 'href="https://github.com/B0yko/agent-claimcheck/blob/v0.1.1/\1"'
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
 pattern = '\]\((?!https?://|#)([^)]+)\)'
 replacement = '](https://github.com/B0yko/agent-claimcheck/blob/v0.1.1/\1)'
 

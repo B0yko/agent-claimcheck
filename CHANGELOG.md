@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- Redesigned reliability and histogram charts: axis ticks and titles, a legend that never overlaps, marker area by bin size, short panel titles.
+- `check` colors verdicts in the table and the summary line, and reason details read as plain sentences in the table and the dashboard.
+- README: a light and dark banner, badges, a results summary with the full recorded tables collapsed, and dark-mode screenshots.
+
 ## [0.1.1] - 2026-09-28
 
 Packaging release: the code, benchmark and recorded results are unchanged from 0.1.0.

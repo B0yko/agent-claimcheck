@@ -18,8 +18,11 @@ RECORDED = REPO_ROOT / "results" / "v0.1.0"
 
 
 def _section(text: str, heading: str) -> str:
-    after = text.split(f"\n## {heading}\n", 1)[1]
-    return after.split("\n## ", 1)[0]
+    """The body under a `##` or `###` heading, up to the next heading or block."""
+    match = re.search(rf"\n#{{2,3}} {re.escape(heading)}\n", text)
+    assert match, heading
+    after = text[match.end() :]
+    return re.split(r"\n#{1,3} |\n<details>", after, maxsplit=1)[0]
 
 
 def test_readme_bench_block_matches_the_recorded_report() -> None:
