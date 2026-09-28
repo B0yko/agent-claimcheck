@@ -71,6 +71,7 @@ class PriceBook:
         self._client = client
         self._models: list[dict[str, Any]] | None = None
         self._endpoints_cache: dict[str, list[dict[str, Any]]] = {}
+        self._fetch_lock = threading.Lock()
 
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._api_key}"} if self._api_key else {}
@@ -78,17 +79,20 @@ class PriceBook:
     def _fetch_models(self) -> list[dict[str, Any]]:
         if self._models is not None:
             return self._models
-        if self._client is None:
-            self._models = []
+        with self._fetch_lock:
+            if self._models is not None:
+                return self._models
+            if self._client is None:
+                self._models = []
+                return self._models
+            try:
+                response = self._client.get(f"{self._base_url}/models", headers=self._headers())
+                response.raise_for_status()
+                data = response.json().get("data", [])
+            except (httpx.HTTPError, ValueError):
+                data = []
+            self._models = data if isinstance(data, list) else []
             return self._models
-        try:
-            response = self._client.get(f"{self._base_url}/models", headers=self._headers())
-            response.raise_for_status()
-            data = response.json().get("data", [])
-        except (httpx.HTTPError, ValueError):
-            data = []
-        self._models = data if isinstance(data, list) else []
-        return self._models
 
     def _listing(self, model: str) -> dict[str, Any] | None:
         for entry in self._fetch_models():
@@ -99,20 +103,23 @@ class PriceBook:
     def _fetch_endpoints(self, model: str) -> list[dict[str, Any]]:
         if model in self._endpoints_cache:
             return self._endpoints_cache[model]
-        endpoints: list[dict[str, Any]] = []
-        if self._client is not None and "/" in model:
-            try:
-                response = self._client.get(
-                    f"{self._base_url}/models/{model}/endpoints", headers=self._headers()
-                )
-                response.raise_for_status()
-                raw = response.json().get("data", {}).get("endpoints", [])
-                if isinstance(raw, list):
-                    endpoints = raw
-            except (httpx.HTTPError, ValueError):
-                endpoints = []
-        self._endpoints_cache[model] = endpoints
-        return endpoints
+        with self._fetch_lock:
+            if model in self._endpoints_cache:
+                return self._endpoints_cache[model]
+            endpoints: list[dict[str, Any]] = []
+            if self._client is not None and "/" in model:
+                try:
+                    response = self._client.get(
+                        f"{self._base_url}/models/{model}/endpoints", headers=self._headers()
+                    )
+                    response.raise_for_status()
+                    raw = response.json().get("data", {}).get("endpoints", [])
+                    if isinstance(raw, list):
+                        endpoints = raw
+                except (httpx.HTTPError, ValueError):
+                    endpoints = []
+            self._endpoints_cache[model] = endpoints
+            return endpoints
 
     def reasoning_supported(self, model: str) -> bool:
         """Whether the model's listing declares a `reasoning` parameter."""

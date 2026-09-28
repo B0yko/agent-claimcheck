@@ -299,3 +299,29 @@ def test_budget_lifetime_cap_allows_call_that_fits(tmp_path: Path) -> None:
     budget = Budget(max_usd=100.0, ledger=ledger, cap=1.0)
     reservation = budget.reserve(0.5)
     assert reservation.amount == pytest.approx(0.5)
+
+
+def test_fetch_models_is_fetched_once_under_concurrent_calls() -> None:
+    calls = {"n": 0}
+    lock = threading.Lock()
+    start = threading.Barrier(10)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        with lock:
+            calls["n"] += 1
+        time.sleep(0.05)  # widen the race window between the check and the write
+        return httpx.Response(200, json=MODELS_PAYLOAD)
+
+    book = _price_book(handler)
+
+    def worker() -> None:
+        start.wait()
+        book.list_price("vendor/model-a")
+
+    threads = [threading.Thread(target=worker) for _ in range(10)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert calls["n"] == 1
