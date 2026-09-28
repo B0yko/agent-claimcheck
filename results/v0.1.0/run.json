@@ -1,0 +1,48 @@
+{
+  "command": "agent-claimcheck bench --live --judges deepseek/deepseek-v4-flash,qwen/qwen3-235b-a22b-2507,mistralai/mistral-small-3.2-24b-instruct --ablation-judge mistralai/mistral-small-3.2-24b-instruct --ablation-prompt claim-by-claim --run-name v0.1.0 --max-usd 8.0 --concurrency 8 --out results/v0.1.0",
+  "concurrency": 8,
+  "dataset_sha256": "5300042deee17d44c41112f11669a4d0a9341be6877ab98e6767789f4d97192a",
+  "date": "2026-09-28",
+  "hardware": "MacBook Air M5, 24 GB",
+  "judge_wall_clock_s": {
+    "judge:deepseek/deepseek-v4-flash": 103.53115466597956,
+    "judge:mistralai/mistral-small-3.2-24b-instruct": 102.90727037505712,
+    "judge:mistralai/mistral-small-3.2-24b-instruct:claim-by-claim": 204.00959399994463,
+    "judge:qwen/qwen3-235b-a22b-2507": 121.10621804196853
+  },
+  "judges": [
+    {
+      "id": "deepseek/deepseek-v4-flash",
+      "json_mode": true,
+      "max_price_in_per_m": 0.21,
+      "max_price_out_per_m": 1.28,
+      "price_date": "2026-09-28",
+      "price_in_per_m": 0.07154,
+      "price_out_per_m": 0.14308,
+      "supports_reasoning": true
+    },
+    {
+      "id": "mistralai/mistral-small-3.2-24b-instruct",
+      "json_mode": true,
+      "max_price_in_per_m": 0.09999999999999999,
+      "max_price_out_per_m": 0.3,
+      "price_date": "2026-09-28",
+      "price_in_per_m": 0.09375,
+      "price_out_per_m": 0.25,
+      "supports_reasoning": false
+    },
+    {
+      "id": "qwen/qwen3-235b-a22b-2507",
+      "json_mode": true,
+      "max_price_in_per_m": 0.25,
+      "max_price_out_per_m": 1.0,
+      "price_date": "2026-09-28",
+      "price_in_per_m": 0.0875,
+      "price_out_per_m": 0.35,
+      "supports_reasoning": false
+    }
+  ],
+  "package_version": "0.1.0",
+  "run_name": "v0.1.0",
+  "total_spend_usd": 0.17892774645000012
+}

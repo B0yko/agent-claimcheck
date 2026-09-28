@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780.00 274.00" font-family="sans-serif">
+<rect x="0" y="0" width="780.00" height="274.00" fill="#ffffff"/>
+<text x="130.00" y="18" text-anchor="middle" font-size="13" fill="#0f172a">rules</text>
+<rect x="46.00" y="34.00" width="200.00" height="200.00" fill="none" stroke="#94a3b8"/>
+<rect x="47.00" y="87.00" width="8.40" height="147.00" fill="#f97316"/>
+<rect x="56.20" y="87.00" width="8.40" height="147.00" fill="#2563eb"/>
+<rect x="67.00" y="234.00" width="8.40" height="0.00" fill="#f97316"/>
+<rect x="76.20" y="234.00" width="8.40" height="0.00" fill="#2563eb"/>
+<rect x="87.00" y="234.00" width="8.40" height="0.00" fill="#f97316"/>
+<rect x="96.20" y="234.00" width="8.40" height="0.00" fill="#2563eb"/>
+<rect x="107.00" y="234.00" width="8.40" height="0.00" fill="#f97316"/>
+<rect x="116.20" y="234.00" width="8.40" height="0.00" fill="#2563eb"/>
+<rect x="127.00" y="234.00" width="8.40" height="0.00" fill="#f97316"/>
+<rect x="136.20" y="234.00" width="8.40" height="0.00" fill="#2563eb"/>
+<rect x="147.00" y="234.00" width="8.40" height="0.00" fill="#f97316"/>
+<rect x="156.20" y="234.00" width="8.40" height="0.00" fill="#2563eb"/>
+<rect x="167.00" y="234.00" width="8.40" height="0.00" fill="#f97316"/>
+<rect x="176.20" y="87.00" width="8.40" height="147.00" fill="#2563eb"/>
+<rect x="187.00" y="87.00" width="8.40" height="147.00" fill="#f97316"/>
+<rect x="196.20" y="234.00" width="8.40" height="0.00" fill="#2563eb"/>
+<rect x="207.00" y="234.00" width="8.40" height="0.00" fill="#f97316"/>
+<rect x="216.20" y="234.00" width="8.40" height="0.00" fill="#2563eb"/>
+<rect x="227.00" y="38.00" width="8.40" height="196.00" fill="#f97316"/>
+<rect x="236.20" y="38.00" width="8.40" height="196.00" fill="#2563eb"/>
+<text x="46.00" y="250.00" font-size="9" fill="#0f172a">0.0</text>
+<text x="234.00" y="250.00" font-size="9" fill="#0f172a">1.0</text>
+<text x="42.00" y="264.00" font-size="9" fill="#0f172a">p_success histogram (share of trace count)</text>
+<text x="390.00" y="18" text-anchor="middle" font-size="13" fill="#0f172a">classifier-lr</text>
+<rect x="306.00" y="34.00" width="200.00" height="200.00" fill="none" stroke="#94a3b8"/>
+<rect x="307.00" y="118.00" width="8.40" height="116.00" fill="#f97316"/>
+<rect x="316.20" y="122.00" width="8.40" height="112.00" fill="#2563eb"/>
+<rect x="327.00" y="222.00" width="8.40" height="12.00" fill="#f97316"/>
+<rect x="336.20" y="218.00" width="8.40" height="16.00" fill="#2563eb"/>
+<rect x="347.00" y="222.00" width="8.40" height="12.00" fill="#f97316"/>
+<rect x="356.20" y="230.00" width="8.40" height="4.00" fill="#2563eb"/>
+<rect x="367.00" y="226.00" width="8.40" height="8.00" fill="#f97316"/>
+<rect x="376.20" y="222.00" width="8.40" height="12.00" fill="#2563eb"/>
+<rect x="387.00" y="230.00" width="8.40" height="4.00" fill="#f97316"/>
+<rect x="396.20" y="226.00" width="8.40" height="8.00" fill="#2563eb"/>
+<rect x="407.00" y="202.00" width="8.40" height="32.00" fill="#f97316"/>
+<rect x="416.20" y="198.00" width="8.40" height="36.00" fill="#2563eb"/>
+<rect x="427.00" y="202.00" width="8.40" height="32.00" fill="#f97316"/>
+<rect x="436.20" y="190.00" width="8.40" height="44.00" fill="#2563eb"/>
+<rect x="447.00" y="202.00" width="8.40" height="32.00" fill="#f97316"/>
+<rect x="456.20" y="182.00" width="8.40" height="52.00" fill="#2563eb"/>
+<rect x="467.00" y="198.00" width="8.40" height="36.00" fill="#f97316"/>
+<rect x="476.20" y="206.00" width="8.40" height="28.00" fill="#2563eb"/>
+<rect x="487.00" y="38.00" width="8.40" height="196.00" fill="#f97316"/>
+<rect x="496.20" y="66.00" width="8.40" height="168.00" fill="#2563eb"/>
+<text x="306.00" y="250.00" font-size="9" fill="#0f172a">0.0</text>
+<text x="494.00" y="250.00" font-size="9" fill="#0f172a">1.0</text>
+<text x="302.00" y="264.00" font-size="9" fill="#0f172a">p_success histogram (share of trace count)</text>
+<text x="650.00" y="18" text-anchor="middle" font-size="13" fill="#0f172a">judge:qwen/qwen3-235b-a22b-2507</text>
+<rect x="566.00" y="34.00" width="200.00" height="200.00" fill="none" stroke="#94a3b8"/>
+<rect x="567.00" y="167.07" width="8.40" height="66.93" fill="#f97316"/>
+<rect x="576.20" y="167.07" width="8.40" height="66.93" fill="#2563eb"/>
+<rect x="587.00" y="231.61" width="8.40" height="2.39" fill="#f97316"/>
+<rect x="596.20" y="226.83" width="8.40" height="7.17" fill="#2563eb"/>
+<rect x="607.00" y="231.61" width="8.40" height="2.39" fill="#f97316"/>
+<rect x="616.20" y="219.66" width="8.40" height="14.34" fill="#2563eb"/>
+<rect x="627.00" y="231.61" width="8.40" height="2.39" fill="#f97316"/>
+<rect x="636.20" y="217.27" width="8.40" height="16.73" fill="#2563eb"/>
+<rect x="647.00" y="231.61" width="8.40" height="2.39" fill="#f97316"/>
+<rect x="656.20" y="234.00" width="8.40" height="0.00" fill="#2563eb"/>
+<rect x="667.00" y="229.22" width="8.40" height="4.78" fill="#f97316"/>
+<rect x="676.20" y="234.00" width="8.40" height="0.00" fill="#2563eb"/>
+<rect x="687.00" y="231.61" width="8.40" height="2.39" fill="#f97316"/>
+<rect x="696.20" y="234.00" width="8.40" height="0.00" fill="#2563eb"/>
+<rect x="707.00" y="234.00" width="8.40" height="0.00" fill="#f97316"/>
+<rect x="716.20" y="234.00" width="8.40" height="0.00" fill="#2563eb"/>
+<rect x="727.00" y="226.83" width="8.40" height="7.17" fill="#f97316"/>
+<rect x="736.20" y="52.34" width="8.40" height="181.66" fill="#2563eb"/>
+<rect x="747.00" y="38.00" width="8.40" height="196.00" fill="#f97316"/>
+<rect x="756.20" y="234.00" width="8.40" height="0.00" fill="#2563eb"/>
+<text x="566.00" y="250.00" font-size="9" fill="#0f172a">0.0</text>
+<text x="754.00" y="250.00" font-size="9" fill="#0f172a">1.0</text>
+<text x="562.00" y="264.00" font-size="9" fill="#0f172a">p_success histogram (share of trace count)</text>
+<rect x="8" y="256.00" width="12" height="8" fill="#f97316"/><text x="24" y="266.00" font-size="9" fill="#0f172a">raw</text><rect x="60" y="256.00" width="12" height="8" fill="#2563eb"/><text x="76" y="266.00" font-size="9" fill="#0f172a">calibrated</text>
+</svg>

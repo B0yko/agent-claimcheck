@@ -41,3 +41,9 @@ jobs:
       - run: uv sync --frozen
       - run: uv run agent-claimcheck dataset generate --seed 20260924 --out /tmp/benchmark-regen
       - run: diff -rq /tmp/benchmark-regen benchmark/v1
+      - run: uv run agent-claimcheck dataset validate benchmark/v1
+      - run: uv run agent-claimcheck bench --from-recorded results/v0.1.0 --out /tmp/recorded-regen
+      - run: |
+          for f in bench.md bench.json reliability.svg histogram.svg; do
+            cmp "results/v0.1.0/$f" "/tmp/recorded-regen/$f"
+          done

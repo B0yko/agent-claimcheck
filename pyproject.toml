@@ -43,6 +43,7 @@ packages = ["src/agent_claimcheck"]
 "schemas/claimcheck-result-v1.json" = "agent_claimcheck/schemas/claimcheck-result-v1.json"
 "examples" = "agent_claimcheck/_data/examples"
 "benchmark/v1" = "agent_claimcheck/_data/benchmark/v1"
+"results/v0.1.0" = "agent_claimcheck/_data/results/v0.1.0"
 
 [tool.ruff]
 line-length = 100

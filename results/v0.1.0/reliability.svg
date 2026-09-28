@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780.00 274.00" font-family="sans-serif">
+<rect x="0" y="0" width="780.00" height="274.00" fill="#ffffff"/>
+<text x="130.00" y="18" text-anchor="middle" font-size="13" fill="#0f172a">rules</text>
+<rect x="46.00" y="34.00" width="200.00" height="200.00" fill="none" stroke="#94a3b8"/>
+<line x1="46.00" y1="234.00" x2="246.00" y2="34.00" stroke="#cbd5e1" stroke-dasharray="4,3"/>
+<path d="M53.89,234.00 L186.00,78.44 L240.00,50.67" fill="none" stroke="#f97316" stroke-width="1.6" stroke-dasharray="5,3"/>
+<circle cx="53.89" cy="234.00" r="2.2" fill="#f97316"/>
+<circle cx="186.00" cy="78.44" r="2.2" fill="#f97316"/>
+<circle cx="240.00" cy="50.67" r="2.2" fill="#f97316"/>
+<path d="M58.37,234.00 L171.98,78.44 L232.72,50.67" fill="none" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="58.37" cy="234.00" r="2.2" fill="#2563eb"/>
+<circle cx="171.98" cy="78.44" r="2.2" fill="#2563eb"/>
+<circle cx="232.72" cy="50.67" r="2.2" fill="#2563eb"/>
+<text x="46.00" y="250.00" font-size="9" fill="#0f172a">0.0</text>
+<text x="234.00" y="250.00" font-size="9" fill="#0f172a">1.0</text>
+<text x="42.00" y="264.00" font-size="9" fill="#0f172a">predicted p_success, actual success rate by bin</text>
+<text x="390.00" y="18" text-anchor="middle" font-size="13" fill="#0f172a">classifier-lr</text>
+<rect x="306.00" y="34.00" width="200.00" height="200.00" fill="none" stroke="#94a3b8"/>
+<line x1="306.00" y1="234.00" x2="506.00" y2="34.00" stroke="#cbd5e1" stroke-dasharray="4,3"/>
+<path d="M308.46,234.00 L330.56,234.00 L360.94,167.33 L378.85,134.00 L391.90,34.00 L415.82,134.00 L438.00,159.00 L458.04,84.00 L473.84,34.00 L500.94,42.16" fill="none" stroke="#f97316" stroke-width="1.6" stroke-dasharray="5,3"/>
+<circle cx="308.46" cy="234.00" r="2.2" fill="#f97316"/>
+<circle cx="330.56" cy="234.00" r="2.2" fill="#f97316"/>
+<circle cx="360.94" cy="167.33" r="2.2" fill="#f97316"/>
+<circle cx="378.85" cy="134.00" r="2.2" fill="#f97316"/>
+<circle cx="391.90" cy="34.00" r="2.2" fill="#f97316"/>
+<circle cx="415.82" cy="134.00" r="2.2" fill="#f97316"/>
+<circle cx="438.00" cy="159.00" r="2.2" fill="#f97316"/>
+<circle cx="458.04" cy="84.00" r="2.2" fill="#f97316"/>
+<circle cx="473.84" cy="34.00" r="2.2" fill="#f97316"/>
+<circle cx="500.94" cy="42.16" r="2.2" fill="#f97316"/>
+<path d="M310.52,234.00 L337.94,234.00 L361.91,234.00 L374.27,167.33 L390.66,34.00 L412.58,145.11 L434.28,143.09 L457.59,34.00 L479.87,34.00 L497.77,43.52" fill="none" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="310.52" cy="234.00" r="2.2" fill="#2563eb"/>
+<circle cx="337.94" cy="234.00" r="2.2" fill="#2563eb"/>
+<circle cx="361.91" cy="234.00" r="2.2" fill="#2563eb"/>
+<circle cx="374.27" cy="167.33" r="2.2" fill="#2563eb"/>
+<circle cx="390.66" cy="34.00" r="2.2" fill="#2563eb"/>
+<circle cx="412.58" cy="145.11" r="2.2" fill="#2563eb"/>
+<circle cx="434.28" cy="143.09" r="2.2" fill="#2563eb"/>
+<circle cx="457.59" cy="34.00" r="2.2" fill="#2563eb"/>
+<circle cx="479.87" cy="34.00" r="2.2" fill="#2563eb"/>
+<circle cx="497.77" cy="43.52" r="2.2" fill="#2563eb"/>
+<text x="306.00" y="250.00" font-size="9" fill="#0f172a">0.0</text>
+<text x="494.00" y="250.00" font-size="9" fill="#0f172a">1.0</text>
+<text x="302.00" y="264.00" font-size="9" fill="#0f172a">predicted p_success, actual success rate by bin</text>
+<text x="650.00" y="18" text-anchor="middle" font-size="13" fill="#0f172a">judge:qwen/qwen3-235b-a22b-2507</text>
+<rect x="566.00" y="34.00" width="200.00" height="200.00" fill="none" stroke="#94a3b8"/>
+<line x1="566.00" y1="234.00" x2="766.00" y2="34.00" stroke="#cbd5e1" stroke-dasharray="4,3"/>
+<path d="M566.00,234.00 L586.00,234.00 L606.00,234.00 L626.00,234.00 L646.00,234.00 L666.00,234.00 L686.00,234.00 L729.33,234.00 L765.27,58.39" fill="none" stroke="#f97316" stroke-width="1.6" stroke-dasharray="5,3"/>
+<circle cx="566.00" cy="234.00" r="2.2" fill="#f97316"/>
+<circle cx="586.00" cy="234.00" r="2.2" fill="#f97316"/>
+<circle cx="606.00" cy="234.00" r="2.2" fill="#f97316"/>
+<circle cx="626.00" cy="234.00" r="2.2" fill="#f97316"/>
+<circle cx="646.00" cy="234.00" r="2.2" fill="#f97316"/>
+<circle cx="666.00" cy="234.00" r="2.2" fill="#f97316"/>
+<circle cx="686.00" cy="234.00" r="2.2" fill="#f97316"/>
+<circle cx="729.33" cy="234.00" r="2.2" fill="#f97316"/>
+<circle cx="765.27" cy="58.39" r="2.2" fill="#f97316"/>
+<path d="M567.89,234.00 L599.65,234.00 L615.29,234.00 L639.04,119.71 L745.58,55.05" fill="none" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="567.89" cy="234.00" r="2.2" fill="#2563eb"/>
+<circle cx="599.65" cy="234.00" r="2.2" fill="#2563eb"/>
+<circle cx="615.29" cy="234.00" r="2.2" fill="#2563eb"/>
+<circle cx="639.04" cy="119.71" r="2.2" fill="#2563eb"/>
+<circle cx="745.58" cy="55.05" r="2.2" fill="#2563eb"/>
+<text x="566.00" y="250.00" font-size="9" fill="#0f172a">0.0</text>
+<text x="754.00" y="250.00" font-size="9" fill="#0f172a">1.0</text>
+<text x="562.00" y="264.00" font-size="9" fill="#0f172a">predicted p_success, actual success rate by bin</text>
+<line x1="8" y1="262.00" x2="24" y2="262.00" stroke="#f97316" stroke-width="1.6" stroke-dasharray="5,3"/><text x="28" y="266.00" font-size="9" fill="#0f172a">raw</text><line x1="60" y1="262.00" x2="76" y2="262.00" stroke="#2563eb" stroke-width="1.6"/><text x="80" y="266.00" font-size="9" fill="#0f172a">calibrated</text>
+</svg>
