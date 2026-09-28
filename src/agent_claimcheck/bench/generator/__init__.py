@@ -13,12 +13,22 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 
+import numpy as np
+
 from agent_claimcheck.bench.generator import booking, coding, crm
 from agent_claimcheck.bench.generator.card import render_card
 from agent_claimcheck.bench.generator.common import sub_rng
-from agent_claimcheck.bench.generator.leakage import leakage_auroc
+from agent_claimcheck.bench.generator.leakage import (
+    leakage_auroc,
+    leakage_auroc_train_test,
+    rank_auroc,
+)
 from agent_claimcheck.bench.generator.plan import DOMAINS, TraceSpec, full_plan
 from agent_claimcheck.bench.generator.pools import build_pools
+from agent_claimcheck.claims import ClaimExtractor
+from agent_claimcheck.features import FEATURES, extract
+from agent_claimcheck.redact import detector_view, resolve_claims
+from agent_claimcheck.rules.engine import builtin_packs
 from agent_claimcheck.schema import Trace, dump_trace
 
 GENERATOR_VERSION = "claimcheck-bench/1"
@@ -111,8 +121,32 @@ def generate(seed: int) -> GeneratedDataset:
     ]
     auroc = leakage_auroc(train_texts, train_labels)
 
+    test_texts = [t.final_claim.text or "" for t in test_traces]
+    test_labels = [
+        0 if t.ground_truth is not None and t.ground_truth.outcome == "success" else 1
+        for t in test_traces
+    ]
+    test_auroc = leakage_auroc_train_test(train_texts, train_labels, test_texts, test_labels)
+
+    # Single-feature AUROC of every classifier feature, train split only
+    # (the leakage audit; the generator itself is frozen by now).
+    extractor = ClaimExtractor(list(builtin_packs().values()))
+    feature_rows = [extract(resolve_claims(detector_view(t), extractor)) for t in train_traces]
+    train_labels_arr = np.array(train_labels, dtype=float)
+    feature_aurocs = {
+        spec.name: rank_auroc(
+            np.array([row[spec.name] for row in feature_rows], dtype=float), train_labels_arr
+        )
+        for spec in FEATURES
+    }
+
     card_markdown = render_card(
-        seed=seed, manifest=manifest, leakage_train_auroc=auroc, examples=false_examples
+        seed=seed,
+        manifest=manifest,
+        leakage_train_auroc=auroc,
+        examples=false_examples,
+        leakage_test_auroc=test_auroc,
+        feature_aurocs=feature_aurocs,
     )
 
     return GeneratedDataset(

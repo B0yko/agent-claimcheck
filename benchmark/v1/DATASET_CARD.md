@@ -102,9 +102,51 @@ A TF-IDF (1,2-gram) + logistic-regression classifier trained on
 `final_claim.text` alone, 5-fold stratified cross-validated, scores
 **0.483 AUROC** on the train split (positive class:
 failure). The benchmark's design keeps this at or below 0.65, so wording
-alone should not give a detector an easy shortcut to the label. The
-matching test-split AUROC is computed once, after the generator is frozen,
-and reported separately rather than iterated on.
+alone should not give a detector an easy shortcut to the label.
+
+The same pipeline, fitted once on the full train split and scored on the
+test split, scores **0.434 AUROC** on test. This number
+was computed a single time, after the classifier detector and the generator
+were both frozen, and is reported rather than iterated on. It is at or below the same 0.65 ceiling as the train-split gate.
+
+### Single-feature AUROC (train)
+
+Each `classifier-lr` feature's own AUROC against the label, computed on the
+train split alone (rank-AUROC, positive class: failure). None of these
+numbers were used to tune the generator; they are reported so a reader can
+see which individual features carry the most signal on their own, before
+the classifier combines them.
+
+| feature | AUROC |
+|---|---|
+| `n_write_calls` | 0.264 |
+| `pending_status_present` | 0.324 |
+| `n_retries` | 0.333 |
+| `steps_after_last_write` | 0.655 |
+| `n_read_calls` | 0.654 |
+| `probe_succeeded` | 0.356 |
+| `last_write_succeeded` | 0.361 |
+| `probe_empty_or_not_found` | 0.625 |
+| `receipt_id_present` | 0.382 |
+| `n_agent_messages` | 0.421 |
+| `write_success_ratio` | 0.422 |
+| `hedge_words_present` | 0.569 |
+| `final_text_length` | 0.567 |
+| `n_failed_results` | 0.438 |
+| `n_steps` | 0.443 |
+| `failed_result_share` | 0.451 |
+| `failure_after_last_write` | 0.549 |
+| `instruction_value_coverage` | 0.451 |
+| `error_keyword_hits` | 0.470 |
+| `n_tool_calls` | 0.471 |
+| `n_tool_results` | 0.471 |
+| `last_result_succeeded` | 0.479 |
+| `probe_present` | 0.481 |
+| `reviewer_phrase_present` | 0.519 |
+| `unsupported_value_ratio` | 0.487 |
+| `n_state_probes` | 0.491 |
+| `claims_extracted_from_text` | 0.498 |
+| `n_claims` | 0.501 |
 
 ## Intended and unintended uses
 

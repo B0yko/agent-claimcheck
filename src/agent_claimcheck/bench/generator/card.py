@@ -57,8 +57,21 @@ def _composition_table(counts: dict[str, int]) -> str:
     return "\n".join(rows)
 
 
+def _feature_auroc_table(feature_aurocs: dict[str, float]) -> str:
+    ordered = sorted(feature_aurocs.items(), key=lambda kv: -abs(kv[1] - 0.5))
+    rows = ["| feature | AUROC |", "|---|---|"]
+    rows += [f"| `{name}` | {value:.3f} |" for name, value in ordered]
+    return "\n".join(rows)
+
+
 def render_card(
-    *, seed: int, manifest: dict[str, Any], leakage_train_auroc: float, examples: dict[str, str]
+    *,
+    seed: int,
+    manifest: dict[str, Any],
+    leakage_train_auroc: float,
+    examples: dict[str, str],
+    leakage_test_auroc: float,
+    feature_aurocs: dict[str, float],
 ) -> str:
     counts: dict[str, int] = manifest["counts"]
 
@@ -66,6 +79,24 @@ def render_card(
         f"**`{kind}`** — {desc}\n\n> {examples.get(kind, '').strip() or '(no example captured)'}"
         for kind, desc in _FALSE_KIND_DESCRIPTIONS
     )
+
+    over_ceiling = leakage_test_auroc > 0.65
+    test_auroc_note = (
+        " It came out above the 0.65 design ceiling that governs the train-split gate above; "
+        "per the evaluation protocol this is reported as a limitation rather than used to "
+        "trigger further generator changes (see Limitations)."
+        if over_ceiling
+        else " It is at or below the same 0.65 ceiling as the train-split gate."
+    )
+    limitations_extra = (
+        f"\n\nThe one-time test-split leakage AUROC ({leakage_test_auroc:.3f}, computed after "
+        "the generator was frozen) came out above the 0.65 design ceiling that governs the "
+        "train-split CV gate above. Per the evaluation protocol, this is reported here rather "
+        "than used to trigger further changes to the generator."
+        if over_ceiling
+        else ""
+    )
+    feature_table = _feature_auroc_table(feature_aurocs)
 
     return f"""\
 # claimcheck-bench v1
@@ -115,9 +146,22 @@ A TF-IDF (1,2-gram) + logistic-regression classifier trained on
 `final_claim.text` alone, 5-fold stratified cross-validated, scores
 **{leakage_train_auroc:.3f} AUROC** on the train split (positive class:
 failure). The benchmark's design keeps this at or below 0.65, so wording
-alone should not give a detector an easy shortcut to the label. The
-matching test-split AUROC is computed once, after the generator is frozen,
-and reported separately rather than iterated on.
+alone should not give a detector an easy shortcut to the label.
+
+The same pipeline, fitted once on the full train split and scored on the
+test split, scores **{leakage_test_auroc:.3f} AUROC** on test. This number
+was computed a single time, after the classifier detector and the generator
+were both frozen, and is reported rather than iterated on.{test_auroc_note}
+
+### Single-feature AUROC (train)
+
+Each `classifier-lr` feature's own AUROC against the label, computed on the
+train split alone (rank-AUROC, positive class: failure). None of these
+numbers were used to tune the generator; they are reported so a reader can
+see which individual features carry the most signal on their own, before
+the classifier combines them.
+
+{feature_table}
 
 ## Intended and unintended uses
 
@@ -134,7 +178,7 @@ and the wording pool is finite and English-only. The rule packs used to
 sanity-check this dataset were co-designed with it (same author, same
 development cycle), so a detector tuned against these rules risks
 overfitting to this benchmark's own conventions rather than to genuine
-claim-checking.
+claim-checking.{limitations_extra}
 
 ## Data sources and licences
 

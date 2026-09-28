@@ -13,12 +13,17 @@ from typer.testing import CliRunner
 from agent_claimcheck import resources
 from agent_claimcheck.bench.generator import generate
 from agent_claimcheck.bench.generator._blocked_words import BLOCKED_SYLLABLE_WORDS
-from agent_claimcheck.bench.generator.leakage import leakage_auroc, rank_auroc
+from agent_claimcheck.bench.generator.leakage import (
+    leakage_auroc,
+    leakage_auroc_train_test,
+    rank_auroc,
+)
 from agent_claimcheck.bench.generator.plan import DOMAINS, FALSE_KINDS, GENUINE_KINDS, full_plan
 from agent_claimcheck.bench.generator.pools import build_pools
 from agent_claimcheck.bench.generator.validate import _domain_template_texts, validate_dataset
 from agent_claimcheck.claims import ClaimExtractor, success_claims
 from agent_claimcheck.cli import app
+from agent_claimcheck.features import FEATURES
 from agent_claimcheck.redact import detector_view, resolve_claims
 from agent_claimcheck.rules.engine import builtin_packs
 from agent_claimcheck.schema import Trace
@@ -185,6 +190,29 @@ def test_leakage_train_auroc_is_at_most_0_65(all_traces: list[Trace]) -> None:
     labels = [0 if t.ground_truth and t.ground_truth.outcome == "success" else 1 for t in train]
     auroc = leakage_auroc(texts, labels)
     assert auroc <= 0.65, auroc
+
+
+def test_card_reports_the_frozen_test_leakage_auroc(all_traces: list[Trace], dataset) -> None:
+    """The generator freeze: the one-time test-split, final-
+    message-only leakage AUROC, fitted on the full train split.
+    """
+    train = [t for t in all_traces if t.meta and t.meta.get("split") == "train"]
+    test = [t for t in all_traces if t.meta and t.meta.get("split") == "test"]
+    train_texts = [t.final_claim.text or "" for t in train]
+    train_labels = [
+        0 if t.ground_truth and t.ground_truth.outcome == "success" else 1 for t in train
+    ]
+    test_texts = [t.final_claim.text or "" for t in test]
+    test_labels = [0 if t.ground_truth and t.ground_truth.outcome == "success" else 1 for t in test]
+    auroc = leakage_auroc_train_test(train_texts, train_labels, test_texts, test_labels)
+    assert auroc <= 0.65, auroc
+    assert f"{auroc:.3f} AUROC** on test" in dataset.card_markdown
+
+
+def test_card_reports_single_feature_auroc_for_every_classifier_feature(dataset) -> None:
+    assert "Single-feature AUROC (train)" in dataset.card_markdown
+    for spec in FEATURES:
+        assert f"`{spec.name}`" in dataset.card_markdown.split("Single-feature AUROC")[1]
 
 
 def test_step_count_does_not_strongly_predict_the_label(all_traces: list[Trace]) -> None:
