@@ -4,7 +4,9 @@ import.
 
 from __future__ import annotations
 
+from agent_claimcheck.detectors import baselines as _baselines  # noqa: F401
 from agent_claimcheck.detectors import classifier as _classifier  # noqa: F401
+from agent_claimcheck.detectors import ensemble as _ensemble  # noqa: F401
 from agent_claimcheck.detectors import judge as _judge  # noqa: F401
 from agent_claimcheck.detectors import rules as _rules  # noqa: F401
 

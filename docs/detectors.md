@@ -250,3 +250,43 @@ client codes above.
 when, and only when, `base_url`'s host is exactly `openrouter.ai`. The
 fallback key is never sent to any other host; with no key resolved at all,
 the detector abstains `no_api_key` before attempting any HTTP call.
+
+## Baselines (`detectors/baselines.py`)
+
+Two detectors with no fitted or learned part, for comparison in the bench
+report. Neither ever abstains, and neither is ever calibrated (a
+`CalibratorSet` simply has no entry for either key).
+
+- **`trust-agent`**: always `p_success = 1.0` — the agent's own claim,
+  taken at face value.
+- **`any-error`**: `p_success = 0.0` when any `tool_result` step has
+  `ok: false` or a non-null `error`, else `1.0`.
+
+## Ensembles (`detectors/ensemble.py`)
+
+Both ensembles run the rules detector first and take its output directly
+when the trace's worst claim outcome is conclusive — `contradicted`,
+`unsupported` or `probe_supported` (the three raw scores `RULE_SCORES`
+never assigns to an abstaining or `receipt_only` outcome). Otherwise a
+second component decides. Either way, `details.decided_by` names the
+component that won (`"rules"`, `"classifier-lr"` or `"judge"`), and the
+raw/calibrated `p_success` reported is that component's own.
+
+Unlike a single detector — which a `Checker` calibrates itself, after
+`score()` returns — an ensemble calibrates each component it actually runs
+*before* deciding (`is_ensemble = True` tells a `Checker` to skip its own
+calibration step for these outputs), because the decision and the
+calibrated value it reports both belong to the deciding component, not to
+the ensemble as a whole.
+
+- **`cascade-offline`** (the default detector for `check`, and free):
+  falls through to `classifier-lr` when rules is inconclusive.
+- **`cascade`**: falls through to the configured LLM judge instead.
+  `details.sent_to_judge` records whether this trace reached the judge, so
+  a bench report can compute the share that did. `concurrent = True`: a
+  `Checker` scores traces for it on a thread pool, since the judge
+  component may make a network call.
+
+Both report `cost_usd`/`latency_ms` as the sum of every component they
+actually ran (just the rules component when rules decided; rules plus the
+second component otherwise).
