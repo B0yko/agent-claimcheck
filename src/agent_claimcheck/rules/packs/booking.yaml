@@ -11,10 +11,12 @@ claims:
       event_id: { exists: true }
       start: { equals: "{subject.start}", as: datetime }
       args.duration_min: { equals: "{subject.duration_min}", as: number }
+      attendees: { contains: "{subject.attendee_email}", as: email }
     probe: "calendar.get_event"
     probe_checks:
       status: { in: [confirmed] }
       start: { equals: "{subject.start}", as: datetime }
+      attendees: { contains: "{subject.attendee_email}", as: email }
   invite_sent:
     action: "email.send_invite"
     receipt:

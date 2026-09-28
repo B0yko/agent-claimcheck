@@ -4,7 +4,9 @@ tools: ["crm.*"]
 claim_patterns:
   updated: ['\bupdat(e|ed|ing)\b']
   note_added: ['\bnote\b.*\badded\b', '\badded\b.*\bnote\b']
-  stage_changed: ['\bstage\b', '\bmoved\b.*\bto\b']
+  stage_changed:
+    - '\b(chang|mov|advanc)\w*\b.*\b(stage|deal)\b.*\bto\b'
+    - '\b(stage|deal)\b.*\b(chang|mov|advanc)\w*\b.*\bto\b'
 claims:
   updated:
     action: "crm.update_contact"
@@ -13,7 +15,7 @@ claims:
       updated_fields: { exists: true }
     probe: "crm.read_record"
     probe_checks:
-      fields: { exists: true }
+      fields: { subset: "{subject.fields}" }
   note_added:
     action: "crm.add_note"
     receipt:

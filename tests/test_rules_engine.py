@@ -15,6 +15,7 @@ from agent_claimcheck.rules.engine import (
     Rule,
     RulePack,
     RulePackError,
+    builtin_packs,
     evaluate_claim,
     load_rule_pack,
     pack_applies,
@@ -377,3 +378,182 @@ def test_retry_after_a_failed_call_reaches_probe_supported() -> None:
     outcome = _evaluate(rule, {}, steps)
     assert outcome.outcome == "probe_supported"
     assert outcome.step == 4
+
+
+# --- reviewer findings: pack rules missing subject-vs-evidence checks ---
+
+
+def test_booking_booked_rule_catches_wrong_attendee() -> None:
+    # `booked`'s subject is {start, timezone, attendee_email,
+    # duration_min}. A booking made for the wrong attendee must not reach
+    # probe_supported just because the receipt/probe otherwise look fine.
+    packs = builtin_packs()
+    steps = [
+        tool_call(
+            0,
+            "calendar.create_event",
+            args={"duration_min": 30, "attendees": ["bob@example.test"]},
+        ),
+        tool_result(
+            1,
+            "calendar.create_event",
+            output={
+                "event_id": "e1",
+                "start": "2026-01-01T00:00:00Z",
+                "attendees": ["bob@example.test"],
+            },
+        ),
+        probe(
+            2,
+            "calendar.get_event",
+            output={
+                "status": "confirmed",
+                "start": "2026-01-01T00:00:00Z",
+                "attendees": ["bob@example.test"],
+                "invites_sent": ["bob@example.test"],
+            },
+        ),
+    ]
+    subject = {
+        "start": "2026-01-01T00:00:00Z",
+        "duration_min": 30,
+        "attendee_email": "alice@example.test",
+    }
+    outcome = evaluate_claim(
+        subject, "booked", domain="booking", steps=steps, packs=list(packs.values())
+    )
+    assert outcome.outcome != "probe_supported"
+
+
+def test_crm_updated_rule_catches_wrong_field_value() -> None:
+    # A right-record-wrong-value CRM update must not reach probe_supported:
+    # the rule must compare the claimed field values, not just their
+    # existence.
+    packs = builtin_packs()
+    steps = [
+        tool_call(0, "crm.update_contact", args={"record_id": "c1"}),
+        tool_result(
+            1,
+            "crm.update_contact",
+            output={"record_id": "c1", "updated_fields": {"phone": "+1-555-9999"}},
+        ),
+        probe(2, "crm.read_record", output={"fields": {"phone": "+1-555-9999"}}),
+    ]
+    subject = {
+        "object": "contact",
+        "record_id": "c1",
+        "fields": {"phone": "+1-555-0100"},
+    }
+    outcome = evaluate_claim(
+        subject, "updated", domain="crm", steps=steps, packs=list(packs.values())
+    )
+    assert outcome.outcome != "probe_supported"
+
+
+def test_coding_tests_passed_rule_catches_a_narrower_suite() -> None:
+    # Claiming the full suite passed while only a subset ran must not reach
+    # probe_supported: the rule must compare subject.suite/count, not just
+    # the probe's failed == 0.
+    packs = builtin_packs()
+    steps = [
+        tool_call(0, "shell.run", args={"command": "pytest tests/test_login.py"}),
+        tool_result(1, "shell.run", output={"exit_code": 0}),
+        probe(
+            2,
+            "ci.run_tests",
+            output={"suite": "tests/test_login.py", "total": 3, "passed": 3, "failed": 0},
+        ),
+    ]
+    subject = {"suite": "full", "count": 42}
+    outcome = evaluate_claim(
+        subject, "tests_passed", domain="coding", steps=steps, packs=list(packs.values())
+    )
+    assert outcome.outcome != "probe_supported"
+
+
+# --- reviewer finding: empty check list vacuously "all skipped" --------
+
+
+def test_probe_supported_when_rule_declares_zero_checks() -> None:
+    # A rule with an empty receipt and no probe_checks is valid per the pack
+    # schema. When the probe genuinely confirms the claim (ok, no error), an
+    # empty check list must not be treated as "every check was skipped".
+    rule = Rule("x.do", receipt={}, probe="x.get", probe_checks={})
+    steps = [
+        tool_call(0, "x.do"),
+        tool_result(1, "x.do", output={}),
+        probe(2, "x.get", ok=True, output={}),
+    ]
+    outcome = _evaluate(rule, {}, steps)
+    assert outcome.outcome == "probe_supported"
+
+
+def test_booking_booked_rule_still_verifies_the_right_attendee() -> None:
+    packs = builtin_packs()
+    steps = [
+        tool_call(
+            0,
+            "calendar.create_event",
+            args={"duration_min": 30, "attendees": ["alice@example.test"]},
+        ),
+        tool_result(
+            1,
+            "calendar.create_event",
+            output={
+                "event_id": "e1",
+                "start": "2026-01-01T00:00:00Z",
+                "attendees": ["alice@example.test"],
+            },
+        ),
+        probe(
+            2,
+            "calendar.get_event",
+            output={
+                "status": "confirmed",
+                "start": "2026-01-01T00:00:00Z",
+                "attendees": ["alice@example.test"],
+                "invites_sent": ["alice@example.test"],
+            },
+        ),
+    ]
+    subject = {
+        "start": "2026-01-01T00:00:00Z",
+        "duration_min": 30,
+        "attendee_email": "alice@example.test",
+    }
+    outcome = evaluate_claim(
+        subject, "booked", domain="booking", steps=steps, packs=list(packs.values())
+    )
+    assert outcome.outcome == "probe_supported"
+
+
+def test_crm_updated_rule_still_verifies_the_right_value() -> None:
+    packs = builtin_packs()
+    steps = [
+        tool_call(0, "crm.update_contact", args={"record_id": "c1"}),
+        tool_result(
+            1,
+            "crm.update_contact",
+            output={"record_id": "c1", "updated_fields": {"phone": "+1-555-0100"}},
+        ),
+        probe(2, "crm.read_record", output={"fields": {"phone": "+1-555-0100"}}),
+    ]
+    subject = {"object": "contact", "record_id": "c1", "fields": {"phone": "+1-555-0100"}}
+    outcome = evaluate_claim(
+        subject, "updated", domain="crm", steps=steps, packs=list(packs.values())
+    )
+    assert outcome.outcome == "probe_supported"
+
+
+def test_coding_tests_passed_rule_still_verifies_the_full_suite() -> None:
+    packs = builtin_packs()
+    steps = [
+        tool_call(0, "shell.run", args={"command": "pytest"}),
+        tool_result(1, "shell.run", output={"exit_code": 0}),
+        probe(2, "ci.run_tests", output={"suite": "full", "total": 42, "passed": 42, "failed": 0}),
+    ]
+    subject = {"suite": "full", "count": 42}
+    outcome = evaluate_claim(
+        subject, "tests_passed", domain="coding", steps=steps, packs=list(packs.values())
+    )
+    assert outcome.outcome == "probe_supported"

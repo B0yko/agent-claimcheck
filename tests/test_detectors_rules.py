@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from factory import tool_call, tool_result, trace
+from factory import probe, tool_call, tool_result, trace
 
-from agent_claimcheck.claims import success_claims
+from agent_claimcheck.claims import ClaimExtractor, success_claims
 from agent_claimcheck.detectors.rules import RulesDetector
-from agent_claimcheck.redact import detector_view
+from agent_claimcheck.redact import detector_view, resolve_claims
 from agent_claimcheck.rules.engine import builtin_packs
 from agent_claimcheck.schema import load_traces
 
@@ -27,11 +27,19 @@ def test_scores_the_worst_outcome_across_claims() -> None:
         "t2",
         "booking",
         [
-            tool_call(0, "calendar.create_event", args={"duration_min": 30}),
+            tool_call(
+                0,
+                "calendar.create_event",
+                args={"duration_min": 30, "attendees": ["a@example.test"]},
+            ),
             tool_result(
                 1,
                 "calendar.create_event",
-                output={"event_id": "e1", "start": "2026-01-01T00:00:00Z"},
+                output={
+                    "event_id": "e1",
+                    "start": "2026-01-01T00:00:00Z",
+                    "attendees": ["a@example.test"],
+                },
             ),
             tool_call(2, "email.send_invite", args={"to": ["a@example.test"]}),
             tool_result(
@@ -43,7 +51,14 @@ def test_scores_the_worst_outcome_across_claims() -> None:
             ),
         ],
         claims=[
-            ("booked", {"start": "2026-01-01T00:00:00Z", "duration_min": 30}),
+            (
+                "booked",
+                {
+                    "start": "2026-01-01T00:00:00Z",
+                    "duration_min": 30,
+                    "attendee_email": "a@example.test",
+                },
+            ),
             ("invite_sent", {"attendee_email": "a@example.test"}),
         ],
     )
@@ -94,3 +109,31 @@ def test_example_browser_rules_abstain_for_every_trace_with_a_success_claim() ->
         assert output.abstain is True
         assert output.abstain_reason == "no_rule"
     assert checked > 0
+
+
+# --- reviewer findings: crm.yaml stage_changed unanchored bare word -----
+
+
+def test_bare_stage_word_does_not_spuriously_downgrade_a_real_update() -> None:
+    # "stage" as ordinary language ("first stage of onboarding") must not be
+    # extracted as a spurious stage_changed claim that drags a real,
+    # probe-confirmed "updated" claim down to false_success.
+    t = trace(
+        "t5",
+        "crm",
+        [
+            tool_call(0, "crm.update_contact", args={"record_id": "c1"}),
+            tool_result(
+                1,
+                "crm.update_contact",
+                output={"record_id": "c1", "updated_fields": ["notes"]},
+            ),
+            probe(2, "crm.read_record", output={"fields": {"notes": "onboarded"}}),
+        ],
+        text=("Updated the contact's notes. This closes out the first stage of onboarding."),
+    )
+    view = resolve_claims(detector_view(t), ClaimExtractor(PACKS))
+    detector = RulesDetector(packs=PACKS)
+    output = detector.score(view)
+    assert output.p_success == 0.97
+    assert {c.type for c in view.final_claim.claims} == {"updated"}

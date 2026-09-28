@@ -3,8 +3,8 @@
 A rule pack maps claim types to a tool-call glob, a set of receipt checks on
 that call's result, and an optional state-probe glob with its own checks. It
 never embeds a Python expression: the only vocabulary is `exists`, `equals`,
-`in`, `contains` and `matches`, plus a small set of typed normalisers (see
-`docs/rules.md` and ADR 0002).
+`in`, `contains`, `matches` and `subset`, plus a small set of typed
+normalisers (see `docs/rules.md` and ADR 0002).
 """
 
 from __future__ import annotations
@@ -44,8 +44,8 @@ RULE_SCORES: dict[Outcome, float | None] = {
     "probe_supported": 0.97,
 }
 
-_CheckOp = Literal["exists", "equals", "in", "contains", "matches"]
-_OPS: tuple[_CheckOp, ...] = ("exists", "equals", "in", "contains", "matches")
+_CheckOp = Literal["exists", "equals", "in", "contains", "matches", "subset"]
+_OPS: tuple[_CheckOp, ...] = ("exists", "equals", "in", "contains", "matches", "subset")
 _NORMALISERS = ("datetime", "email", "number", "string")
 
 
@@ -136,6 +136,7 @@ _CHECK_SCHEMA: dict[str, Any] = {
         "in": {"type": "array"},
         "contains": {},
         "matches": {"type": "string"},
+        "subset": {},
         "as": {"enum": list(_NORMALISERS)},
     },
 }
@@ -424,6 +425,15 @@ def _apply_check(
         passed = _equal(actual, expected, check.as_)
         return CheckResultRow(field_path, "equals", expected, actual, _pf(passed)), False
 
+    if check.op == "subset":
+        if not isinstance(expected, Mapping) or not isinstance(actual, Mapping):
+            return CheckResultRow(field_path, "subset", expected, actual, "fail"), False
+        passed = all(
+            key in actual and _equal(actual[key], value, check.as_)
+            for key, value in expected.items()
+        )
+        return CheckResultRow(field_path, "subset", expected, actual, _pf(passed)), False
+
     # contains
     if isinstance(actual, str):
         passed = str(expected) in actual
@@ -596,7 +606,7 @@ def _resolve_probe(
             missing_subject,
         )
 
-    if all(c.result == "skipped" for c in all_checks):
+    if all_checks and all(c.result == "skipped" for c in all_checks):
         return ClaimOutcome(
             claim_type,
             "receipt_only",

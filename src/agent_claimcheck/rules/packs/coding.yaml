@@ -13,6 +13,8 @@ claims:
     probe: "ci.run_tests"
     probe_checks:
       failed: { equals: 0, as: number }
+      suite: { equals: "{subject.suite}" }
+      total: { equals: "{subject.count}", as: number }
   fixed:
     action: "fs.write_file"
     receipt:
