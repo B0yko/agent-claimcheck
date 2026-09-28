@@ -48,8 +48,8 @@ agent-claimcheck check your-traces.jsonl --rules examples/rules/custom.yaml
 
 ## `browser-demo.jsonl` — the `example:browser` alias
 
-Twenty-four traces converted from a browser-automation agent, domain
-`browser`. No built-in rule pack covers `browser.*` tool names, so every
+Twenty-four browser-agent traces authored by the project owner and
+converted to agent-trace/v1, domain `browser`, with fictional sites. No built-in rule pack covers `browser.*` tool names, so every
 claim's rules outcome is `unknown` and the rules detector abstains on all
 24 — this is deliberate: it demonstrates a domain with no rule pack
 abstaining rather than guessing, and traces with no success claim

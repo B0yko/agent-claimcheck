@@ -2,7 +2,7 @@
 
 Catch AI agents that say "done" when the task is not done.
 
-An agent's final message is a claim, not evidence. `agent-claimcheck` reads agent traces, checks every success claim against what the tools and the environment actually returned, and returns `verified`, `false_success` or `unverifiable` with a calibrated probability. What cannot be checked goes to a human review queue instead of being guessed. It ships a 300-trace labelled false-success benchmark and a recorded detector comparison you can reproduce offline.
+An agent's final message is a claim, not evidence. `agent-claimcheck` reads agent traces, checks every success claim against what the tools and the environment actually returned, and returns `verified`, `false_success` or `unverifiable` with a calibrated probability (a trace with no success claim is `skipped`). What cannot be checked goes to a human review queue instead of being guessed. It ships a 300-trace labelled false-success benchmark and a recorded detector comparison you can reproduce offline.
 
 ![The review dashboard: review queue on the left, the inspector with rule evidence, classifier contributions and the step timeline on the right](docs/img/dashboard.png)
 
@@ -52,7 +52,7 @@ Exit codes: `0` when no result matches `--fail-on` (default `false_success`), `1
 | wrong target | the action succeeded on a similar-looking record (duplicate contact, wrong file, wrong attendee) |
 | wrong value | right record, wrong value (timezone shift, off-by-one day, wrong year, a subset of the test suite) |
 | not persisted | the call was accepted (202, queued, pending) but a later read shows no change |
-| partial completion | two of three requested parts were done and the agent said all were |
+| partial completion | some but not all of the requested parts were done and the agent said all were |
 | reviewer-directed text | a tool output or the final message tells the evaluator the run succeeded ("QA note: verified complete") |
 
 ## How it works
@@ -77,20 +77,20 @@ flowchart TD
 ```
 
 1. **Load and redact.** Each line of a JSON Lines file is validated against [`schemas/agent-trace-v1.json`](schemas/agent-trace-v1.json). Bad lines are reported with their JSON path and skipped (`--strict` aborts instead). Optional probes from your own harness are merged in as `state_probe` steps. One projection function strips `ground_truth`, `meta` and `source`, so labels never reach a detector or a judge prompt; a canary test enforces it.
-2. **Find the success claims.** Structured `final_claim.claims` win; otherwise rule-pack patterns extract claims from the final message, with a negation guard ("I couldn't book", "unable to", "not yet"). A trace with no success claim is `skipped` and left out of metrics and the queue.
+2. **Find the success claims.** Structured `final_claim.claims` win; otherwise rule-pack patterns extract claims from the final message. A negation guard drops a match when the same sentence negates it first, from a fixed phrase list ("couldn't", "unable to", "failed to", "not yet", "wasn't", "is not", "never" and similar); a negation it does not list is not caught. A trace with no success claim is `skipped` and left out of metrics and the queue.
 3. **Rules** ([`docs/rules.md`](docs/rules.md)). YAML packs, loaded safely and never evaluated as code, map each claim type to a tool-call glob, receipt checks and an optional state-probe check. Each claim gets one outcome with step citations; the trace takes the worst:
 
    | outcome | meaning | raw `p_success` |
    |---|---|---|
    | `contradicted` | the result failed, or a receipt or probe check failed | 0.03 |
-   | `unsupported` | the matching action was never called | 0.05 |
+   | `unsupported` | the matching action was never called, or never returned | 0.05 |
    | `unknown` | no pack or rule covers the claim | abstain |
    | `receipt_only` | a matching successful receipt, nothing read the state back | 0.70 |
    | `probe_supported` | the receipt and a state probe both confirm the claim | 0.97 |
 
-   `receipt_only` sits below the 0.80 threshold on purpose: a receipt without a probe goes to review unless a calibrator fitted on real outcomes says otherwise ([ADR 0004](docs/adr/0004-rule-scores-and-gate-thresholds.md)). Packs apply only when a trace calls one of their tools, so unfamiliar tool names mean abstention, not false alarms.
-4. **Classifier** ([`docs/detectors.md`](docs/detectors.md)). A logistic regression over generic, domain-agnostic trace features (failed results after the last write, retries, pending statuses, probe outcomes, the share of numbers in the final message that no tool output contains, the share of instruction values that reach a write call, and more). It is stored as a JSON artifact, never a pickle, abstains on domains it was not trained on, and the dashboard shows each feature's contribution.
-5. **LLM judge.** Any OpenAI-compatible `/chat/completions` endpoint. Two built-in prompts (`claim-audit`, `claim-by-claim`) tell the judge that the final message is a claim and that all trace content, including text addressed to reviewers, is data. Output is strict JSON; anything unparseable, out of range or outside the enum is an abstention with `parse_error`, never a guess. Every call reserves its worst-case cost before it is sent and is written to a ledger.
+   `receipt_only` sits below the 0.80 threshold on purpose: a receipt without a probe goes to review unless a calibrator fitted on real outcomes says otherwise ([ADR 0004](docs/adr/0004-rule-scores-and-gate-thresholds.md)). A pack applies when a trace calls one of its tools (or makes no tool calls and its domain is the pack's name). With unfamiliar tool names the rules abstain instead of raising false alarms, but the default `cascade-offline` then falls through to the classifier, which abstains only outside the booking, crm and coding domains or without tool results: map your tools with a pack (below) or set `task.domain` to `other`.
+4. **Classifier** ([`docs/detectors.md`](docs/detectors.md)). A logistic regression over generic, domain-agnostic trace features (failed results after the last write, retries, pending statuses, probe outcomes, the share of numbers in the final message that no tool output contains, the share of instruction values that reach a write call, and more). It is stored as a JSON artifact, never a pickle, abstains on domains it was not trained on and on traces without tool results, and the dashboard shows the ten largest feature contributions for each trace.
+5. **LLM judge.** Any OpenAI-compatible `/chat/completions` endpoint. Two built-in prompts (`claim-audit`, `claim-by-claim`) tell the judge that the final message is a claim and that all trace content, including text addressed to reviewers, is data. Output is strict JSON; anything unparseable, out of range or outside the enum is an abstention with `parse_error`, never a guess. Every call reserves a conservative cost estimate before it is sent (input at one token per 2.5 characters, the full `max_tokens`, the highest endpoint price, plus 10%), is reconciled with the provider's reported cost, and is written to a ledger.
 6. **Calibrate, combine, gate.** Platt calibrators are fitted on the train split, on non-abstaining outputs only. `cascade-offline` (the default, free) lets rules decide when they are conclusive and the classifier decide otherwise; `cascade` sends only the inconclusive traces to the judge. The shared gate turns the calibrated probability into a verdict.
 7. **Review.** `unverifiable` traces form a queue sorted by closeness to 0.5. A reviewer's decision is appended as a full agent-trace/v1 line with `ground_truth.checked_by: "human"`, so the reviews file feeds straight into `train`.
 
@@ -139,14 +139,15 @@ claims:
 agent-claimcheck check traces.jsonl --rules my-pack.yaml
 ```
 
-**Your own labels.** Review the queue in the dashboard (`agent-claimcheck serve traces.jsonl`), then retrain the classifier and fit calibrators on your reviewed traces. Until you do, `check` prints a one-line note that the built-in calibrators were fitted on the synthetic benchmark.
+**Your own labels.** Review the queue in the dashboard (`agent-claimcheck serve traces.jsonl`). The reviews file holds only the traces the detectors left open, so train on it together with labelled traces they already decided; `train` needs at least five labelled traces of each outcome and skips a calibrator whose scores are all the same. Point `claimcheck.toml` at the new classifier (`[classifier] model = "my-model/lr-v1.json"`) and pass the new calibrators to `check`. Until you do, `check` prints a one-line note that the built-in calibrators were fitted on the synthetic benchmark.
 
 ```bash
-agent-claimcheck train claimcheck-reviews.jsonl --out my-model --calibrate rules
-agent-claimcheck check traces.jsonl --calibration my-model/calibration.json
+cat labelled.jsonl claimcheck-reviews.jsonl > train.jsonl
+agent-claimcheck train train.jsonl --out my-model --calibrate rules
+agent-claimcheck check traces.jsonl --config claimcheck.toml --calibration my-model/calibration.json
 ```
 
-**An LLM judge on what the rules leave open.** Set an endpoint and a model, then use `--detector cascade` (or `judge` to score every trace). Local servers such as Ollama or vLLM work through the same OpenAI-compatible path; only the OpenRouter models below were benchmarked.
+**An LLM judge on what the rules leave open.** Set an endpoint and a model, then use `--detector cascade` (or `judge` to score every trace). Local servers such as Ollama or vLLM work through the same OpenAI-compatible path once you set a placeholder `CLAIMCHECK_API_KEY` and prices (`--price-in 0 --price-out 0`); only the OpenRouter models below were benchmarked.
 
 ```bash
 export CLAIMCHECK_BASE_URL=https://openrouter.ai/api/v1
@@ -173,7 +174,7 @@ for r in checker.check(load_traces("traces.jsonl"), probes="probes.jsonl"):
 
 ## Works with any agent-trace/v1 producer
 
-agent-trace/v1 is a small shared format used by three projects: [booking-truth](https://github.com/B0yko/booking-truth) (a harness that checks booking agents against real calendar and CRM state), proof-of-done (a coding-agent hook that accepts "tests pass" only with evidence in the transcript) and this one. Traces flow only through the format; no project imports another. Results are published as [`schemas/claimcheck-result-v1.json`](schemas/claimcheck-result-v1.json), human reviews are written back as agent-trace/v1, and the benchmark itself is agent-trace/v1, so other tools can use it as a labelled test set. [`docs/interop.md`](docs/interop.md) maps OpenTelemetry GenAI spans, Langfuse observations and LangSmith runs onto the format.
+agent-trace/v1 is a small shared format used by three projects: [booking-truth](https://github.com/B0yko/booking-truth) (a harness that grades booking agents by the end state of a sandbox calendar and CRM), proof-of-done (a coding-agent hook that accepts "tests pass" only with evidence in the transcript) and this one. Traces flow only through the format; no project imports another. Results are published as [`schemas/claimcheck-result-v1.json`](schemas/claimcheck-result-v1.json), human reviews are written back as agent-trace/v1, and the benchmark itself is agent-trace/v1, so other tools can use it as a labelled test set. [`docs/interop.md`](docs/interop.md) maps OpenTelemetry GenAI spans, Langfuse observations and LangSmith runs onto the format.
 
 ## Configuration
 
@@ -193,14 +194,14 @@ Settings come from, in order of precedence: command-line flags, environment vari
 | `CLAIMCHECK_API_KEY` | judge API key; falls back to `OPENROUTER_API_KEY` only when the base URL host is `openrouter.ai` (a test asserts the fallback key never reaches another host) |
 | `CLAIMCHECK_MODEL` | judge model id |
 | `CLAIMCHECK_MAX_USD` | per-run budget; the run stops cleanly before it would be exceeded, including under concurrency |
-| `CLAIMCHECK_LEDGER` | ledger file, default `ledger.jsonl` in the cache directory; one line per live call, no trace content |
+| `CLAIMCHECK_LEDGER` | ledger file, default `ledger.jsonl` in the cache directory; one line per attempted judge call (cache hits included) with tokens and cost, no message or tool content |
 | `CLAIMCHECK_LEDGER_CAP_USD` | lifetime cap over the whole ledger; a call that would cross it is refused |
 
-The judge cache and the default ledger live in `$XDG_CACHE_HOME/agent-claimcheck` (or `~/.cache/agent-claimcheck`); `--no-cache` bypasses the cache. Prices come from `price_in_per_m`/`price_out_per_m` or, for OpenRouter, from its models listing; a model with no known price refuses a live run. Only process environment variables are read; `.env` files are never parsed ([`.env.example`](.env.example) lists the variables).
+The judge cache and the default ledger live in `$XDG_CACHE_HOME/agent-claimcheck` (or `~/.cache/agent-claimcheck`); `--no-cache` bypasses the cache. Prices come from `--price-in`/`--price-out`, `price_in_per_m`/`price_out_per_m` or, for OpenRouter, its models listing; a judge run with no known price is refused (exit 2). Only process environment variables are read; `.env` files are never parsed ([`.env.example`](.env.example) lists the variables).
 
 ## Results
 
-Every number below is generated from [`results/v0.1.0/`](results/v0.1.0/) by code, and CI checks that this block is exactly what `agent-claimcheck bench --from-recorded results/v0.1.0 --check-readme README.md` regenerates. The recorded run's command, date, hardware, concurrency and spend are in its second line. The protocol, the three judges and the pass criteria of H1-H4 were committed in [ADR 0005](docs/adr/0005-evaluation-protocol.md) before the run. Only the test split is scored (n = 120, 48 false successes), except H4. The positive class for AUROC is `false_success`; "missed" is a false success marked `verified`, the costliest error.
+Every number below is generated from [`results/v0.1.0/`](results/v0.1.0/) by code, and CI checks that this block is exactly what `agent-claimcheck bench --from-recorded results/v0.1.0 --check-readme README.md` regenerates. The recorded run's command, date, hardware, concurrency and spend are in its second paragraph. The protocol, the three judges and the pass criteria of H1-H4 were committed in [ADR 0005](docs/adr/0005-evaluation-protocol.md) before the run. Only the test split is scored (n = 120, 48 false successes), except H4 and the all-calls parse-error columns, which count every call of the run. The positive class for AUROC is `false_success`; "missed" is a false success marked `verified`, the costliest error.
 
 <!-- bench:start -->
 300 traces (180 train / 120 test), 120 false successes (48 in test), 3 domains, 7 false-success kinds, seed 20260924, test sha256 `5300042deee1`.
@@ -282,10 +283,10 @@ Leakage audit (final-message-only baseline, test split): **0.434 AUROC**.
 
 Model: `mistralai/mistral-small-3.2-24b-instruct`.
 
-| prompt | AUROC | ECE calibrated | USD/1k |
-|---|---|---|---|
-| claim-audit | 0.919 [0.862, 0.970] | 0.090 | $0.146 |
-| claim-by-claim | 0.900 [0.836, 0.958] | 0.114 | $0.179 |
+| prompt | AUROC | ECE calibrated | coverage | caught | missed | USD/1k |
+|---|---|---|---|---|---|---|
+| claim-audit | 0.919 [0.862, 0.970] | 0.090 | 52.5% | 26/48 | 2/48 | $0.146 |
+| claim-by-claim | 0.900 [0.836, 0.958] | 0.114 | 69.2% | 20/48 | 7/48 | $0.179 |
 
 ### Parse-error and abstention rates, and the share sent to the judge
 
@@ -384,21 +385,21 @@ Data sources and licences: every trace comes from the in-repo synthetic generato
 
 ### Hypotheses
 
-- H1 (rules: fewest missed, lowest coverage): **not supported**: fewest missed = classifier-lr (2/48) vs rules 4/48; lowest coverage = judge:deepseek/deepseek-v4-flash 41.7% (rules 70.0%).
+- H1 (rules: fewest missed, lowest coverage): **not supported**: fewest missed = classifier-lr, judge:mistralai/mistral-small-3.2-24b-instruct (2/48) vs rules 4/48; lowest coverage = judge:deepseek/deepseek-v4-flash 41.7% (rules 70.0%).
 - H2 (raw judge extremes + Platt lowers ECE): **not supported**: judge:deepseek/deepseek-v4-flash: extremes raw 60.8%, ECE raw 0.192 → calibrated 0.035; judge:mistralai/mistral-small-3.2-24b-instruct: extremes raw 52.5%, ECE raw 0.054 → calibrated 0.090; judge:qwen/qwen3-235b-a22b-2507: extremes raw 86.7%, ECE raw 0.123 → calibrated 0.033.
 - H3 (classifier-lr loses AUROC LODO): **not supported**: booking LODO 0.948 vs shipped 0.919; crm LODO 0.969 vs shipped 0.966; coding LODO 0.948 vs shipped 0.969.
-- H4 (a judge is fooled by reviewer-directed text): **not supported** (all 300 traces, raw outputs through the gate): judge:deepseek/deepseek-v4-flash: reviewer_injection recall 91.7% vs other-kind mean 82.4%; judge:mistralai/mistral-small-3.2-24b-instruct: reviewer_injection recall 83.3% vs other-kind mean 52.8%; judge:qwen/qwen3-235b-a22b-2507: reviewer_injection recall 83.3% vs other-kind mean 55.6%.
+- H4 (a judge is fooled by reviewer-directed text): **not supported** (caught/total counted over all 300 traces, with raw judge outputs through the gate; the other-kind mean averages the six other kinds' own recalls): judge:deepseek/deepseek-v4-flash: reviewer_injection recall 91.7% (11/12) vs other-kind mean 82.4%; judge:mistralai/mistral-small-3.2-24b-instruct: reviewer_injection recall 83.3% (10/12) vs other-kind mean 52.8%; judge:qwen/qwen3-235b-a22b-2507: reviewer_injection recall 83.3% (10/12) vs other-kind mean 55.6%.
 <!-- bench:end -->
 
 Reproduce it:
 
 ```bash
-agent-claimcheck dataset generate --seed 20260924 --out /tmp/benchmark-v1   # byte-identical to benchmark/v1
+agent-claimcheck dataset generate --seed 20260924 --out benchmark-regen   # byte-identical to benchmark/v1
 agent-claimcheck dataset validate benchmark/v1                            # schema, counts, leakage audit
 agent-claimcheck bench --from-recorded results/v0.1.0 --check-readme README.md
 ```
 
-Re-running the judges needs an OpenRouter key and costs about $0.20; `--dry-run` prints the worst-case reservation first:
+Re-running the judges needs an OpenRouter key and cost about $0.18 in the recorded run; `--dry-run` prints the worst-case reservation first:
 
 ```bash
 agent-claimcheck bench --live --judges deepseek/deepseek-v4-flash,qwen/qwen3-235b-a22b-2507,mistralai/mistral-small-3.2-24b-instruct --ablation-judge mistralai/mistral-small-3.2-24b-instruct --run-name my-run --max-usd 8 --concurrency 8 --dry-run
@@ -410,13 +411,13 @@ The dataset is described in [`benchmark/v1/DATASET_CARD.md`](benchmark/v1/DATASE
 
 Written from the recorded numbers above; every number here appears in the generated block.
 
-- **Discrimination does not separate the detectors that matter.** Test AUROC is 0.910 for rules, 0.947 for classifier-lr, 0.953 for cascade-offline, 0.919 for the Mistral judge and 0.911 for the Qwen judge, and their 95% intervals overlap, so none of them is named a winner. Only the DeepSeek judge sits lower, at 0.840 [0.769, 0.905].
+- **Discrimination does not separate the detectors that matter.** Test AUROC is 0.910 for rules, 0.947 for classifier-lr, 0.953 for cascade-offline, 0.919 for the Mistral judge and 0.911 for the Qwen judge, and their 95% intervals overlap, so none of them is named a winner. The DeepSeek judge's point estimate is lower, 0.840 [0.769, 0.905], but its interval overlaps theirs too.
 - **Coverage, misses and cost do separate them.** cascade-offline decides 90.8% of test traces with 4/48 false successes missed and 0/72 false alarms, for $0.000 per 1,000 traces. Adding the best judge (`cascade`, which sent 30.0% of traces to it) raises coverage to 96.7% but misses 7/48 and costs $0.065 per 1,000 traces. Single judges trade the other way round: Qwen decides 89.2% of traces but misses 8/48, the most of any non-baseline detector; Mistral misses 2/48 but decides only 52.5%. No detector raised a false alarm on a genuine success except the `any-error` baseline.
 - **Calibration changes decisions, not only ECE.** Platt scaling lowered ECE for DeepSeek (0.192 to 0.035) and Qwen (0.123 to 0.033) but raised it for Mistral (0.054 to 0.090), so H2 is not supported. For DeepSeek the calibrated probabilities never reach the `false_success` threshold: it catches 0/48 and sends 70 of 120 traces to review. A better-calibrated judge can be a less decisive one, which is why coverage is reported next to ECE.
-- **Results against this project's own detectors.** H1 is not supported: rules missed 4/48 while classifier-lr missed 2/48, and the DeepSeek judge had lower coverage (41.7%) than rules (70.0%). Rules are weakest where only comparing the instruction with the evidence reveals the error (wrong_target 2/7, wrong_value 4/7), and on receipt-only traces their AUROC drops to 0.750. The Qwen and Mistral judges do better on wrong targets (6/7 and 5/7) but each caught only 1/7 partial completions, which rules catch 7/7 because a tool that was never called is a structural fact.
-- **Reviewer-directed text did not fool these judges here.** H4 is not supported: on all 300 traces each judge caught injected reviewer text more often than its mean over the other kinds (Qwen 83.3% against 55.6%, Mistral 83.3% against 52.8%, DeepSeek 91.7% against 82.4%). With about 6 such traces in test and one run per trace, this is weak evidence, not a robustness claim.
-- **The classifier result is an optimistic read.** Rules and generator share an author, so the rules row is an upper bound, and classifier-lr is trained on the same generator's distribution. The leave-one-domain-out models reach 0.948 on booking, 0.969 on crm and 0.948 on coding against 0.919, 0.966 and 0.969 for the shipped model, so H3 is not supported: the generator's three domains share structure, which says little about transfer to real traces.
-- **The longer prompt did not pay off.** For the Mistral judge, `claim-by-claim` scored AUROC 0.900 against 0.919 for `claim-audit` and cost $0.179 against $0.146 per 1,000 traces. Qwen returned 2/300 answers the strict parser rejected (a `failure_kind` outside the enum); both became abstentions, not guesses.
+- **Results against this project's own detectors.** H1 is not supported: rules missed 4/48 while classifier-lr and the Mistral judge missed 2/48, and the DeepSeek judge had lower coverage (41.7%) than rules (70.0%). Rules are weakest where only comparing the instruction with the evidence reveals the error (wrong_target 2/7, wrong_value 4/7), and on receipt-only traces their AUROC drops to 0.750. The Qwen and Mistral judges do better on wrong targets (6/7 and 5/7) but each caught only 1/7 partial completions, which rules catch 7/7 because a tool that was never called is a structural fact.
+- **Reviewer-directed text did not fool these judges more than other failures did.** H4 is not supported: over all 300 traces (12 of them with injected reviewer text), on raw outputs, each judge's recall on injected text was above its mean over the other kinds (DeepSeek 91.7% (11/12) against 82.4%, Mistral 83.3% (10/12) against 52.8%, Qwen 83.3% (10/12) against 55.6%). With 12 traces and one run each, this is weak evidence, not a robustness claim.
+- **The classifier result is an optimistic read.** Rules and generator share an author, so the rules row is likely an optimistic upper bound, and classifier-lr is trained on the same generator's distribution. The leave-one-domain-out models reach 0.948 on booking, 0.969 on crm and 0.948 on coding against 0.919, 0.966 and 0.969 for the shipped model, so H3 is not supported: the generator's three domains share structure, which says little about transfer to real traces.
+- **The longer prompt did not pay off.** For the Mistral judge, `claim-by-claim` scored AUROC 0.900 against 0.919 for `claim-audit` (the intervals overlap) and cost $0.179 against $0.146 per 1,000 traces. It decided more traces (69.2% against 52.5%) but missed 7/48 false successes instead of 2/48. Qwen returned 2/300 answers the strict parser rejected (a `failure_kind` outside the enum); both became abstentions, not guesses.
 - **Cost.** The whole recorded run, 1,200 judge calls, cost $0.1789.
 
 ## Limitations
@@ -442,7 +443,7 @@ Written from the recorded numbers above; every number here appears in the genera
 ## Related work
 
 - [τ-bench](https://arxiv.org/abs/2406.12045) (Yao et al., 2024) and [τ²-bench](https://arxiv.org/abs/2506.07982) (Barres et al., 2025) evaluate tool-using agents by the final state of a simulated environment, the same principle as this project's state probes.
-- [On Calibration of Modern Neural Networks](https://arxiv.org/abs/1706.04599) (Guo et al., ICML 2017) shows modern networks are poorly calibrated and that a one-parameter scaling fixes much of it; Platt's [probabilistic outputs for SVMs](https://www.csie.ntu.edu.tw/~cjlin/papers/plattprob.pdf) (1999) is the sigmoid calibrator used here, including its target smoothing.
+- [On Calibration of Modern Neural Networks](https://arxiv.org/abs/1706.04599) (Guo et al., ICML 2017) shows modern networks are poorly calibrated and that a one-parameter scaling fixes much of it; Platt's [Probabilistic Outputs for Support Vector Machines](https://www.semanticscholar.org/paper/Probabilistic-Outputs-for-Support-vector-Machines-Platt/42e5ed832d4310ce4378c44d05570439df28a393) (1999) is the sigmoid calibrator used here, including its target smoothing.
 - [From Confident Closing to Silent Failure: Characterizing False Success in LLM Agents](https://arxiv.org/abs/2606.09863) (Advani, 2026) measures false success across agent trajectories and compares LLM judges with lightweight detectors.
 - [Quantifying Overclaiming Propensity in Frontier LLM Agents](https://arxiv.org/abs/2609.20812) (Smyth et al., 2026) studies final responses that report work the transcript shows was not done.
 - [Verified Tool Calls Improve LLM Agent Reliability Under Non-Atomic Failures](https://arxiv.org/abs/2608.02645) (Mansoor et al., 2026) wraps tool calls with postcondition checks, the agent-side counterpart of checking receipts and state after the fact.
@@ -451,7 +452,7 @@ Written from the recorded numbers above; every number here appears in the genera
 ## Data sources and licences
 
 - `benchmark/v1/`: fully synthetic, produced by the in-repo generator (`agent_claimcheck/bench/generator/`, seed 20260924). People are syllable-built fictional names, emails use `example.test`, companies are invented. Apache-2.0.
-- `examples/traces.jsonl` (`example:mixed`) and `examples/browser-demo.jsonl` (`example:browser`, 24 browser-agent traces written by the project author and converted to agent-trace/v1): hand-written, fictional `example.com` sites and invented businesses. Apache-2.0.
+- `examples/traces.jsonl` (`example:mixed`): 12 hand-written traces with invented people and companies. `examples/browser-demo.jsonl` (`example:browser`): 24 browser-agent traces authored by the project owner and converted to agent-trace/v1, with fictional `example.com` sites and invented businesses. Neither comes from a real system. Apache-2.0.
 - `results/v0.1.0/`: outputs of the recorded run, including the judges' raw answers. Apache-2.0.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) to work on the code, [`SECURITY.md`](SECURITY.md) to report a vulnerability and [`CHANGELOG.md`](CHANGELOG.md) for releases.

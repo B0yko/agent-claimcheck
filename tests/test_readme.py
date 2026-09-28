@@ -22,11 +22,6 @@ def _section(text: str, heading: str) -> str:
     return after.split("\n## ", 1)[0]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="the README's bench block predates the reworded H1/H4 lines and the wider "
-    "ablation table; paste the regenerated report into it, then delete this marker",
-)
 def test_readme_bench_block_matches_the_recorded_report() -> None:
     result = CliRunner().invoke(
         app, ["bench", "--from-recorded", str(RECORDED), "--check-readme", str(README)]
