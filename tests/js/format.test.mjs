@@ -56,6 +56,7 @@ test("truncate only cuts strings longer than the limit", () => {
 
 test("formatDomain capitalises the first letter", () => {
   assert.equal(formatDomain("booking"), "Booking");
+  assert.equal(formatDomain("crm"), "CRM");
   assert.equal(formatDomain(""), "-");
   assert.equal(formatDomain(null), "-");
 });

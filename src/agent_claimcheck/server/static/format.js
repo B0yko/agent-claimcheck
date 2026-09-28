@@ -41,8 +41,11 @@ export function truncate(text, limit) {
   return `${text.slice(0, limit)}…`;
 }
 
+const DOMAIN_LABELS = { crm: "CRM" };
+
 export function formatDomain(domain) {
   if (typeof domain !== "string" || domain.length === 0) return "-";
+  if (Object.hasOwn(DOMAIN_LABELS, domain)) return DOMAIN_LABELS[domain];
   return domain[0].toUpperCase() + domain.slice(1);
 }
 
