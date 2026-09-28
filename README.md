@@ -39,8 +39,8 @@ You need [uv](https://docs.astral.sh/uv/). Nothing below calls a paid API.
 
 ```bash
 uvx agent-claimcheck check example:mixed                     # one of each verdict per domain
-uvx agent-claimcheck bench --from-recorded recorded:v0.1.0    # the Results below, offline
-uvx agent-claimcheck serve bench:test                         # dashboard on 127.0.0.1:8765
+uvx agent-claimcheck bench --from-recorded recorded:v0.1.0   # the Results below, offline
+uvx agent-claimcheck serve bench:test                        # dashboard on 127.0.0.1:8765
 ```
 
 ![A check run over the bundled examples](docs/img/check.svg)
@@ -61,19 +61,30 @@ uvx agent-claimcheck serve bench:test                         # dashboard on 127
 
 ## How it works
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/pipeline-dark.svg">
+  <img alt="Pipeline: load and redact traces; score them with rules, a classifier and an LLM judge; calibrate and gate them into verified, false_success or unverifiable; review what is left and retrain" src="docs/img/pipeline-light.svg" width="100%">
+</picture>
+
+<details>
+<summary>The same pipeline as a Mermaid diagram</summary>
+
 ```mermaid
-flowchart LR
-    A["traces.jsonl<br/>(+ probes.jsonl)"] --> B["validate + merge probes<br/>agent-trace/v1"]
-    B --> C["detector view<br/>labels removed"]
-    C --> R["rules"]
-    C --> K["classifier-lr"]
-    C --> J["LLM judge"]
-    R & K & J --> P["Platt calibration"]
-    P --> E["cascades"]
+flowchart TD
+    A["traces.jsonl (+ probes.jsonl)"] --> B["load + schema validation, probe merge"]
+    B --> C["detector view: ground_truth, meta, source removed"]
+    C --> R["rules"] & K["classifier-lr"] & J["LLM judge"]
+    R & K & J --> P["Platt calibrators (JSON)"]
+    P --> E["cascade-offline | cascade"]
     E --> G{"shared gate"}
-    G --> V["verified · false_success · unverifiable"]
-    V --> Q["review queue"] --> H["reviews.jsonl<br/>checked_by: human"] --> T["train"]
+    G --> V["verified / false_success / unverifiable (+ skipped)"]
+    V --> O["results.jsonl, CLI table, exit code"]
+    V --> Q["dashboard review queue"]
+    Q --> H["reviews.jsonl (agent-trace/v1, checked_by: human)"]
+    H --> T["train"]
 ```
+
+</details>
 
 1. **Load and redact.** Each JSON Lines record is validated against [`schemas/agent-trace-v1.json`](schemas/agent-trace-v1.json), with per-line errors and JSON paths (`--strict` aborts on the first). Probes from your own harness are merged in as `state_probe` steps. One projection strips `ground_truth`, `meta` and `source`, so labels never reach a detector or a judge prompt; a canary test enforces it.
 2. **Find the claims.** Structured `final_claim.claims` win; otherwise rule-pack patterns extract them from the final message, with a negation guard for phrases like "couldn't", "unable to", "not yet" and "wasn't". No success claim means `skipped`.
