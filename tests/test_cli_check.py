@@ -242,13 +242,17 @@ def _fake_server(handler_cls: type[BaseHTTPRequestHandler]) -> tuple[ThreadingHT
 
 
 def _write_labelled_traces(path: Path, n: int) -> None:
+    # The judge request carries no trace or task id, so identical traces
+    # share one cache key: a trace scored after another's live call has
+    # been cached would be a cache hit, not a call. A per-trace instruction
+    # keeps every request distinct, whatever the thread timing.
     lines = []
     for i in range(n):
         trace = {
             "schema": "agent-trace/v1",
             "trace_id": f"t{i}",
             "source": "test/0.0.1",
-            "task": {"id": f"t{i}-task", "domain": "booking", "instruction": "book a slot"},
+            "task": {"id": f"t{i}-task", "domain": "booking", "instruction": f"book slot {i}"},
             "steps": [
                 {
                     "i": 0,
@@ -428,6 +432,7 @@ def test_check_detector_judge_budget_exhaustion(
         )
         rows = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
         assert len(rows) == 3
+        assert not any(r["cached"] for r in rows)
         verdicts = [r["verdict"] for r in rows]
         assert verdicts.count("verified") == 1
         assert verdicts.count("unverifiable") == 2
