@@ -6,9 +6,21 @@ tests that need one specific shape of evidence.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from agent_claimcheck.schema import Claim, FinalClaim, Step, Task, Trace
+
+#: Integers, decimals and percentages, e.g. "0.910", "48", "90.8%".
+_NUMBER_RE = re.compile(r"-?\d+\.\d+%?|-?\d+%?")
+
+
+def numbers_in(text: str) -> set[str]:
+    """Every number-like token in `text` (a Findings paragraph, say), so a
+    test can assert each one also appears somewhere in a generated report:
+    a cheap guard against a written-up number that the tables don't back.
+    """
+    return set(_NUMBER_RE.findall(text))
 
 
 def step(
