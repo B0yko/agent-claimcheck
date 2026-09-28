@@ -8,11 +8,19 @@ a score.
 
 from __future__ import annotations
 
-from typing import Any
+from pydantic import BaseModel, ConfigDict, Field
 
-from pydantic import BaseModel, ConfigDict
+from agent_claimcheck.claims import ClaimExtractor, ResolvedClaim
+from agent_claimcheck.schema import Step, Task, Trace
 
-from agent_claimcheck.schema import FinalClaim, Step, Task, Trace
+
+class ViewFinalClaim(BaseModel):
+    """`final_claim` as detectors see it: text plus resolved claims."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    text: str | None
+    claims: list[ResolvedClaim] = Field(default_factory=list)
 
 
 class DetectorView(BaseModel):
@@ -23,30 +31,42 @@ class DetectorView(BaseModel):
     trace_id: str
     task: Task
     steps: list[Step]
-    final_claim: FinalClaim
+    final_claim: ViewFinalClaim
+    claims_extracted: bool = False
 
 
 def detector_view(trace: Trace) -> DetectorView:
     """Project a trace down to what detectors are allowed to see.
 
     `trace_id` is kept for bookkeeping (logging, joining results back to
-    traces); judge prompts must never render it.
+    traces); judge prompts must never render it. Structured claims (when
+    `final_claim.claims` is non-empty) are wrapped as resolved claims right
+    away; otherwise `final_claim.claims` stays empty until `resolve_claims`
+    runs pattern extraction.
     """
+    claims = [
+        ResolvedClaim(type=c.type, subject=c.subject, source="structured")
+        for c in trace.final_claim.claims
+    ]
     return DetectorView(
         trace_id=trace.trace_id,
         task=trace.task,
         steps=trace.steps,
-        final_claim=trace.final_claim,
+        final_claim=ViewFinalClaim(text=trace.final_claim.text, claims=claims),
     )
 
 
-def resolve_claims(view: DetectorView, extractor: Any = None) -> DetectorView:
-    """Return a view whose `final_claim.claims` are resolved claims.
+def resolve_claims(view: DetectorView, extractor: ClaimExtractor | None = None) -> DetectorView:
+    """Return a copy whose `final_claim.claims` are the resolved claims.
 
-    Claim resolution (structured claims from `final_claim.claims`, falling
-    back to pattern extraction over `final_claim.text` when that list is
-    empty) is added by the claims module. Until then this returns the view
-    unchanged.
+    Structured claims (already present on `view`) win and are returned
+    unchanged. Otherwise, when an extractor is given, pattern extraction
+    runs over `final_claim.text` and `view.claims_extracted` is set.
     """
-    del extractor
-    return view
+    if view.final_claim.claims or extractor is None:
+        return view
+    extracted = extractor.extract(
+        view.final_claim.text or "", domain=view.task.domain, steps=view.steps
+    )
+    new_final_claim = view.final_claim.model_copy(update={"claims": extracted})
+    return view.model_copy(update={"final_claim": new_final_claim, "claims_extracted": True})
