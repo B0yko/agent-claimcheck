@@ -48,6 +48,21 @@ from agent_claimcheck.redact import DetectorView
 #: Reported as `p_success` whenever the judge abstains.
 DEFAULT_BASE_RATE = 0.6
 
+#: The reason `detail` for each abstention code (`abstain_reason` keeps the code).
+_ABSTAIN_DETAILS: dict[str, str] = {
+    "no_api_key": "the judge did not run: no API key is set",
+    "unknown_price": "the judge did not run: the model's price is unknown",
+    "budget_exhausted": "the judge did not run: the run's budget is used up",
+    "ledger_cap": "the judge did not run: the spending ledger's cap is reached",
+    "parse_error": "the judge's answer could not be parsed",
+    "http_429": "the judge API rate-limited the request",
+    "http_5xx": "the judge API returned a server error",
+    "http_4xx": "the judge API rejected the request",
+    "timeout": "the judge call timed out",
+    "network": "the judge call failed with a network error",
+    "invalid_response": "the judge API returned an invalid response",
+}
+
 
 class JudgeDetector:
     """Scores a trace by asking an LLM to audit the final claim against the trace."""
@@ -304,7 +319,14 @@ class JudgeDetector:
             p_success=self._base_rate,
             abstain=True,
             abstain_reason=reason,
-            reasons=[Reason(claim=None, outcome=reason, step=None, detail=reason[:200])],
+            reasons=[
+                Reason(
+                    claim=None,
+                    outcome=reason,
+                    step=None,
+                    detail=_ABSTAIN_DETAILS.get(reason, f"the judge abstained ({reason})")[:200],
+                )
+            ],
             cost_usd=cost_usd,
             latency_ms=latency_ms,
             cached=cached,

@@ -347,7 +347,10 @@ class Checker:
             reasons=list(final_output.reasons)
             or [
                 Reason(
-                    claim=None, outcome=final_output.detector, step=None, detail="no evidence cited"
+                    claim=None,
+                    outcome=final_output.detector,
+                    step=None,
+                    detail="the detector cited no evidence",
                 )
             ],
             claims=list(view.final_claim.claims),

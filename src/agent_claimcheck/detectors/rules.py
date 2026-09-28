@@ -57,7 +57,9 @@ class RulesDetector:
                 abstain=True,
                 abstain_reason="no_rule",
                 reasons=[
-                    Reason(claim=None, outcome="unknown", step=None, detail="no success claims")
+                    Reason(
+                        claim=None, outcome="unknown", step=None, detail="no success claim to check"
+                    )
                 ],
             )
 

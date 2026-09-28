@@ -184,8 +184,13 @@ class ClassifierDetector:
         if not self.guard:
             return None
         has_result = any(s.kind == "tool_result" for s in trace.steps)
-        if trace.task.domain in self.training_domains and has_result:
+        domain = trace.task.domain
+        if domain in self.training_domains and has_result:
             return None
+        if domain not in self.training_domains:
+            detail = f"domain '{domain}' is outside the classifier's training domains"
+        else:
+            detail = "no tool results to check the claim against"
         return DetectorOutput(
             detector=self.name,
             p_success=self.base_rate,
@@ -196,7 +201,7 @@ class ClassifierDetector:
                     claim=None,
                     outcome="out_of_distribution",
                     step=None,
-                    detail="trace domain or missing tool results are outside the training set",
+                    detail=detail[:200],
                 )
             ],
         )
@@ -224,7 +229,8 @@ class ClassifierDetector:
                     outcome="classifier-lr",
                     step=None,
                     detail=(
-                        f"strongest signal: {self.features[top_i]} ({contributions[top_i]:+.3f})"
+                        f"classifier: {self.features[top_i]} is the strongest signal "
+                        f"({contributions[top_i]:+.2f})"
                     )[:200],
                 )
             )

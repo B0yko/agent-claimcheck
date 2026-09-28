@@ -52,7 +52,7 @@ class AnyErrorDetector:
                         claim=None,
                         outcome="any-error",
                         step=failed.i,
-                        detail="at least one tool_result step failed",
+                        detail="at least one tool result failed",
                     )
                 ],
             )
@@ -65,7 +65,7 @@ class AnyErrorDetector:
                     claim=None,
                     outcome="any-error",
                     step=None,
-                    detail="no tool_result step failed",
+                    detail="no tool result failed",
                 )
             ],
         )

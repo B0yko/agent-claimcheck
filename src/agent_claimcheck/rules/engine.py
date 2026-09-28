@@ -486,16 +486,14 @@ def evaluate_claim(
     applicable = [p for p in packs if pack_applies(p, domain, steps)]
     rule = next((p.claims[claim_type] for p in applicable if claim_type in p.claims), None)
     if rule is None:
-        return ClaimOutcome(
-            claim_type, "unknown", None, "no applicable rule pack defines this claim type"
-        )
+        return ClaimOutcome(claim_type, "unknown", None, "no rule pack covers this claim type")
 
     matching_calls = [
         s for s in steps if s.kind == "tool_call" and s.name and fnmatchcase(s.name, rule.action)
     ]
     if not matching_calls:
         return ClaimOutcome(
-            claim_type, "unsupported", None, f"no tool_call matches action {rule.action!r}"
+            claim_type, "unsupported", None, f"no tool call matches {rule.action!r}"
         )
 
     result_for_call = _invert_pairing(steps)
@@ -543,7 +541,7 @@ def evaluate_claim(
         )
 
     return ClaimOutcome(
-        claim_type, "unsupported", None, "no matching call has a result yet", missing_subject=False
+        claim_type, "unsupported", None, "no matching call returned a result", missing_subject=False
     )
 
 
@@ -562,7 +560,7 @@ def _resolve_probe(
             claim_type,
             "receipt_only",
             result_step.i,
-            "receipt matched; no probe declared for this claim",
+            "the call's result matches the claim; no state probe is defined for it",
             tuple(receipt_checks),
             receipt_missing,
         )
@@ -575,7 +573,7 @@ def _resolve_probe(
             claim_type,
             "receipt_only",
             result_step.i,
-            "receipt matched; no state_probe matched this claim's probe glob",
+            "the call's result matches the claim, but no state probe checked it",
             tuple(receipt_checks),
             receipt_missing,
         )
@@ -607,7 +605,7 @@ def _resolve_probe(
             claim_type,
             "receipt_only",
             result_step.i,
-            "every check was skipped; capped below probe_supported",
+            "every check was skipped, so nothing confirms the claim",
             tuple(all_checks),
             missing_subject,
         )

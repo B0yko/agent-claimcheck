@@ -113,6 +113,7 @@ def test_parse_error_abstains_but_still_records_cost() -> None:
 
     assert output.abstain is True
     assert output.abstain_reason == "parse_error"
+    assert output.reasons[0].detail == "the judge's answer could not be parsed"
     assert output.cost_usd == pytest.approx(0.0005)
     assert output.p_success == 0.6  # base rate
     assert output.details["raw_response"] == "not valid json"
@@ -131,6 +132,7 @@ def test_client_error_code_abstains_with_that_reason() -> None:
 
     assert output.abstain is True
     assert output.abstain_reason == "http_4xx"
+    assert output.reasons[0].detail == "the judge API rejected the request"
     assert output.cost_usd == 0.0
 
 
@@ -153,6 +155,7 @@ def test_no_api_key_abstains_before_any_http_call(monkeypatch: pytest.MonkeyPatc
 
     assert output.abstain is True
     assert output.abstain_reason == "no_api_key"
+    assert output.reasons[0].detail == "the judge did not run: no API key is set"
     assert output.p_success == 0.6
 
 

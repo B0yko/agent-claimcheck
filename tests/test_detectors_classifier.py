@@ -132,6 +132,7 @@ def test_ood_guard_abstains_on_unknown_domain() -> None:
     output = detector.score(detector_view(other_domain))
     assert output.abstain is True
     assert output.abstain_reason == "out_of_distribution"
+    assert output.reasons[0].detail == "domain 'crm' is outside the classifier's training domains"
     assert output.p_success == artifact["base_rate"]
 
 
@@ -146,6 +147,7 @@ def test_ood_guard_abstains_without_tool_results() -> None:
     output = detector.score(detector_view(no_results))
     assert output.abstain is True
     assert output.abstain_reason == "out_of_distribution"
+    assert output.reasons[0].detail == "no tool results to check the claim against"
 
 
 def test_guard_false_scores_out_of_distribution_traces_anyway() -> None:
@@ -164,6 +166,11 @@ def test_guard_false_scores_out_of_distribution_traces_anyway() -> None:
     )
     output = detector.score(detector_view(other_domain))
     assert output.abstain is False
+    # The decision names its strongest feature with a two-decimal contribution.
+    top = output.details["contributions"][0]
+    assert output.reasons[0].detail == (
+        f"classifier: {top['feature']} is the strongest signal ({top['value']:+.2f})"
+    )
 
 
 def test_example_browser_abstains_for_every_trace() -> None:
