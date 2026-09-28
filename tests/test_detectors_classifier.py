@@ -12,11 +12,12 @@ from factory import probe, tool_call, tool_result, trace
 from agent_claimcheck.claims import ClaimExtractor, success_claims
 from agent_claimcheck.detectors.classifier import (
     ClassifierDetector,
+    load_artifact,
     oof_predictions,
     train_lr,
 )
 from agent_claimcheck.features import extract
-from agent_claimcheck.redact import detector_view, resolve_claims
+from agent_claimcheck.redact import DetectorView, detector_view, resolve_claims
 from agent_claimcheck.rules.engine import builtin_packs
 from agent_claimcheck.schema import load_traces
 
@@ -193,3 +194,38 @@ def test_oof_predictions_are_deterministic() -> None:
     first = oof_predictions(views, labels, seed=0)
     second = oof_predictions(views, labels, seed=0)
     assert first == second
+
+
+def test_load_artifact_defaults_to_the_packaged_model() -> None:
+    artifact = load_artifact()
+    assert artifact["format"] == "claimcheck-lr/v1"
+    assert set(artifact["training_domains"]) == {"booking", "crm", "coding"}
+
+
+def test_retraining_on_bench_train_reproduces_the_committed_artifact() -> None:
+    """`train` on `bench:train` must
+    reproduce `models/lr-v1.json` within 1e-6 absolute on every coefficient,
+    mean and scale.
+    """
+    committed = load_artifact()
+
+    extractor = ClaimExtractor(list(builtin_packs().values()))
+    views: list[DetectorView] = []
+    labels: list[int] = []
+    domains: list[str] = []
+    for t in load_traces("bench:train"):
+        view = resolve_claims(detector_view(t), extractor)
+        assert t.ground_truth is not None
+        views.append(view)
+        labels.append(1 if t.ground_truth.outcome == "success" else 0)
+        domains.append(t.task.domain)
+
+    retrained = train_lr(views, labels, domains, seed=committed["seed"])
+
+    assert retrained["features"] == committed["features"]
+    assert retrained["training_domains"] == committed["training_domains"]
+    assert retrained["C"] == committed["C"]
+    assert retrained["n_train"] == committed["n_train"]
+    for key in ("coef", "means", "scales"):
+        assert np.array(retrained[key]) == pytest.approx(np.array(committed[key]), abs=1e-6)
+    assert retrained["intercept"] == pytest.approx(committed["intercept"], abs=1e-6)
