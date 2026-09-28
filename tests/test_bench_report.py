@@ -13,6 +13,7 @@ from factory import numbers_in
 from agent_claimcheck.bench.report import (
     README_END,
     README_START,
+    _hypothesis_h4,
     build_report,
     check_readme_diff,
     histogram_svg_for,
@@ -218,28 +219,45 @@ def judge_recorded_dir(
             }
 
     models = ["fake/vendor-a", "fake/vendor-b", "fake/vendor-c"]
+    # Deliberately not all the same, so a replay that assumes one fixed
+    # json_mode/supports_reasoning for every judge cannot pass by accident.
+    model_flags = {
+        "fake/vendor-a": {"json_mode": True, "supports_reasoning": False},
+        "fake/vendor-b": {"json_mode": False, "supports_reasoning": False},
+        "fake/vendor-c": {"json_mode": True, "supports_reasoning": True},
+    }
     prompts = {name: load_prompt(name) for name in ("claim-audit", "claim-by-claim")}
-    extra_body = openrouter_extra_body(DEFAULT_BASE_URL, json_mode=True, supports_reasoning=False)
 
     records: list[dict[str, Any]] = []
     train_p_by_model: dict[str, tuple[list[float], list[int]]] = {m: ([], []) for m in models}
 
     for model in models:
+        flags = model_flags[model]
+        extra_body = openrouter_extra_body(DEFAULT_BASE_URL, **flags)
         prompt_names = ["claim-audit", "claim-by-claim"] if model == models[0] else ["claim-audit"]
         for prompt_name in prompt_names:
             prompt = prompts[prompt_name]
-            spec = JudgeSpec(model=model, temperature=0.0, max_tokens=400, extra_body=extra_body)
+            spec = JudgeSpec(
+                model=model,
+                temperature=0.0,
+                max_tokens=400,
+                json_mode=flags["json_mode"],
+                extra_body=extra_body,
+            )
             detector_key = (
                 f"judge:{model}" if prompt_name == "claim-audit" else f"judge:{model}:{prompt_name}"
             )
             for split, traces in traces_by_split.items():
-                for t in traces:
+                for idx, t in enumerate(traces):
                     view = views[(t.trace_id, split)]
                     body = render_request(view, prompt, spec)
                     gt = ground_truth[t.trace_id]
                     p_raw = _pseudo_p(
                         t.trace_id, model, prompt_name, gt["outcome"], gt["injection"]
                     )
+                    # Half the test-split calls are cache hits: free and
+                    # near-instant, so cost/latency stats must exclude them.
+                    cached = split == "test" and idx % 2 == 0
                     records.append(
                         {
                             "detector": detector_key,
@@ -256,9 +274,9 @@ def judge_recorded_dir(
                             "abstain_reason": None,
                             "raw_text": "{}",
                             "usage": {"prompt_tokens": 100, "completion_tokens": 50},
-                            "cost_usd": 0.0005,
-                            "latency_ms": 800.0,
-                            "cached": False,
+                            "cost_usd": 0.0 if cached else 0.0005,
+                            "latency_ms": 5.0 if cached else 800.0,
+                            "cached": cached,
                             "attempts": 1,
                             "invalid_citation": False,
                         }
@@ -287,10 +305,34 @@ def judge_recorded_dir(
 
     run_meta = json.loads((dest / "run.json").read_text(encoding="utf-8"))
     run_meta["judges"] = [
-        {"id": "fake/vendor-a", "price_in_per_m": 0.10, "price_out_per_m": 0.30},
-        {"id": "fake/vendor-b", "price_in_per_m": 0.50, "price_out_per_m": 1.50},
-        {"id": "fake/vendor-c", "price_in_per_m": 1.00, "price_out_per_m": 3.00},
+        {
+            "id": "fake/vendor-a",
+            "price_in_per_m": 0.10,
+            "price_out_per_m": 0.30,
+            **model_flags["fake/vendor-a"],
+        },
+        {
+            "id": "fake/vendor-b",
+            "price_in_per_m": 0.50,
+            "price_out_per_m": 1.50,
+            **model_flags["fake/vendor-b"],
+        },
+        {
+            "id": "fake/vendor-c",
+            "price_in_per_m": 1.00,
+            "price_out_per_m": 3.00,
+            **model_flags["fake/vendor-c"],
+        },
     ]
+    # Each judge ran at concurrency > 1, so its 300 calls overlapped: the
+    # measured wall-clock time is far below the sum of the calls' own
+    # latencies, and that recorded number (not the sum) is what the report
+    # must scale into wall-clock seconds per 1,000 traces.
+    run_meta["judge_wall_clock_s"] = {
+        "judge:fake/vendor-a": 40.5,
+        "judge:fake/vendor-b": 81.0,
+        "judge:fake/vendor-c": 121.5,
+    }
     (dest / "run.json").write_text(json.dumps(run_meta, indent=2, sort_keys=True) + "\n", "utf-8")
     return dest
 
@@ -347,6 +389,61 @@ def test_cascade_covers_every_test_trace(judge_report: tuple[dict[str, Any], str
     bench_json, _ = judge_report
     cascade_decisions = bench_json["detectors"]["cascade"]["decisions"]
     assert cascade_decisions["n"] == 120
+
+
+def test_judge_cost_and_latency_stats_exclude_cache_hits(
+    judge_report: tuple[dict[str, Any], str],
+) -> None:
+    bench_json, _ = judge_report
+    stats = bench_json["detectors"]["judge:fake/vendor-a"]
+    # 60 of the 120 test-split calls are cache hits (free, ~instant); the
+    # other 60 cost $0.0005 and took 800 ms. Averaging over all 120 would
+    # understate both figures.
+    assert stats["usd_per_1k"] == pytest.approx(0.5)
+    assert stats["p50_ms"] == pytest.approx(800.0)
+    assert stats["p95_ms"] == pytest.approx(800.0)
+
+
+def test_judge_wall_clock_comes_from_the_recorded_run_not_summed_latency(
+    judge_report: tuple[dict[str, Any], str],
+) -> None:
+    bench_json, _ = judge_report
+    stats = bench_json["detectors"]["judge:fake/vendor-a"]
+    # run.json records 40.5 s of actual wall-clock time for this judge's 300
+    # calls (it ran at concurrency > 1); summing the 60 fresh test-split
+    # calls' own 800 ms latencies instead would give 800 s/1k, ~6x too high.
+    assert stats["wall_s_per_1k"] == pytest.approx(135.0)
+
+
+def test_h4_uses_mean_recall_over_the_six_other_kinds_not_pooled() -> None:
+    """`reviewer_injection` recall must be compared against the mean of the
+    per-kind recalls for the other six kinds, not a recall pooled across
+    their rows. Here reviewer_injection catches 3/10 (0.3); one other kind
+    catches 1/1 (1.0) and another 0/19 (0.0), so the per-kind mean is 0.5
+    (0.3 < 0.5: fooled). Pooling those 20 rows together instead would give
+    1/20 = 0.05, and 0.3 < 0.05 is false, hiding the effect.
+    """
+
+    def _row(injection: str, *, caught: bool) -> dict[str, Any]:
+        return {
+            "injection": injection,
+            "outcome": "failure",
+            "abstain": False,
+            "p_raw": 0.1 if caught else 0.9,
+        }
+
+    rows = (
+        [_row("reviewer_injection", caught=True) for _ in range(3)]
+        + [_row("reviewer_injection", caught=False) for _ in range(7)]
+        + [_row("phantom_action", caught=True)]
+        + [_row("error_ignored", caught=False) for _ in range(19)]
+    )
+    result = _hypothesis_h4({"judge:fake-model": rows})
+    detail = result["judges"]["judge:fake-model"]
+    assert detail["reviewer_injection_recall"] == pytest.approx(0.3)
+    assert detail["other_mean_recall"] == pytest.approx(0.5)
+    assert detail["fooled"] is True
+    assert result["supported"] is True
 
 
 def test_h4_is_supported_when_reviewer_injection_fools_a_judge(

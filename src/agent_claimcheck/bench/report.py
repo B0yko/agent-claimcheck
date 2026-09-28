@@ -127,8 +127,21 @@ def _detector_stats(
     rows: Sequence[Mapping[str, Any]],
     latency_ms_by_trace: Mapping[str, float],
     cost_usd_by_trace: Mapping[str, float] | None = None,
+    *,
+    wall_s_per_1k: float | None = None,
 ) -> dict[str, Any]:
-    """Every Table A/B number for one detector's recorded (or derived) rows."""
+    """Every Table A/B number for one detector's recorded (or derived) rows.
+
+    A cache hit (`row["cached"]`) still counts toward AUROC/ECE/decision
+    stats, but is excluded from cost and latency stats: it cost nothing and
+    took no real time, so keeping it in would understate both. Non-judge
+    rows never carry a `cached` key, so this changes nothing for them.
+
+    `wall_s_per_1k` overrides the sum-of-per-trace-latencies estimate below
+    when given; callers pass it for judge detectors, whose calls run at
+    concurrency > 1, so summing individual call latencies overstates real
+    wall-clock time.
+    """
     labels = [_failure_label(r) for r in rows]
     y_success = [1 - lab for lab in labels]
     p_raw = [r["p_raw"] for r in rows]
@@ -136,18 +149,23 @@ def _detector_stats(
     verdicts = [_verdict(r) for r in rows]
     n = len(rows)
 
+    fresh_rows = [r for r in rows if not r.get("cached", False)]
+    n_fresh = len(fresh_rows)
     latencies = [
-        latency_ms_by_trace[r["trace_id"]] for r in rows if r["trace_id"] in latency_ms_by_trace
+        latency_ms_by_trace[r["trace_id"]]
+        for r in fresh_rows
+        if r["trace_id"] in latency_ms_by_trace
     ]
     costs = (
-        [cost_usd_by_trace.get(r["trace_id"], 0.0) for r in rows]
+        [cost_usd_by_trace.get(r["trace_id"], 0.0) for r in fresh_rows]
         if cost_usd_by_trace is not None
-        else [float(r.get("cost_usd", 0.0)) for r in rows]
+        else [float(r.get("cost_usd", 0.0)) for r in fresh_rows]
     )
     total_latency_ms = sum(latencies)
     p50 = p95 = 0.0
     if latencies:
         p50, p95 = (float(x) for x in np.percentile(latencies, [50, 95], method="linear"))
+    computed_wall_s_per_1k = (total_latency_ms / 1000.0 / n_fresh * 1000.0) if n_fresh else 0.0
 
     return {
         "n": n,
@@ -157,8 +175,8 @@ def _detector_stats(
         "brier_calibrated": brier(p_used, y_success),
         "extremes_raw": extremes_share(p_raw),
         "decisions": decision_stats(verdicts, labels),
-        "usd_per_1k": (sum(costs) / n * 1000.0) if n else 0.0,
-        "wall_s_per_1k": (total_latency_ms / 1000.0 / n * 1000.0) if n else 0.0,
+        "usd_per_1k": (sum(costs) / n_fresh * 1000.0) if n_fresh else 0.0,
+        "wall_s_per_1k": wall_s_per_1k if wall_s_per_1k is not None else computed_wall_s_per_1k,
         "p50_ms": p50,
         "p95_ms": p95,
     }
@@ -341,9 +359,28 @@ def _judge_rows_by_key(
             "abstain_reason": rec.get("abstain_reason"),
             "cost_usd": rec.get("cost_usd", 0.0),
             "latency_ms": rec.get("latency_ms", 0.0),
+            "cached": bool(rec.get("cached", False)),
         }
         by_key.setdefault(rec["detector"], []).append(row)
     return by_key
+
+
+def _judge_wall_s_per_1k(
+    key: str, rows_for_key: Sequence[Mapping[str, Any]], run_meta: Mapping[str, Any]
+) -> float | None:
+    """The recorded run's measured wall-clock time for this judge's calls
+    (train and test together, since one live run scores all traces),
+    scaled to a rate per 1,000 traces — judges run at concurrency > 1, so
+    this cannot come from summing individual call latencies. `None` when
+    the run recorded no wall-clock time for this detector (an offline-only
+    run, or a synthetic one that supplies no timing).
+    """
+    wall_clock_by_key = run_meta.get("judge_wall_clock_s") or {}
+    wall_clock_s = wall_clock_by_key.get(key)
+    n_calls = len(rows_for_key)
+    if wall_clock_s is None or not n_calls:
+        return None
+    return float(wall_clock_s) / n_calls * 1000.0
 
 
 def _best_judge(judge_rows: Mapping[str, list[dict[str, Any]]]) -> str | None:
@@ -469,6 +506,9 @@ def _hypothesis_h2(judge_rows: Mapping[str, list[dict[str, Any]]]) -> dict[str, 
     return {"supported": supported, "judges": detail}
 
 
+_OTHER_FALSE_KINDS: tuple[str, ...] = tuple(k for k in FALSE_KINDS if k != "reviewer_injection")
+
+
 def _hypothesis_h4(judge_rows: Mapping[str, list[dict[str, Any]]]) -> dict[str, Any]:
     keys = sorted(k for k in judge_rows if _judge_key_is_primary(k))
     if not keys:
@@ -485,9 +525,16 @@ def _hypothesis_h4(judge_rows: Mapping[str, list[dict[str, Any]]]) -> dict[str, 
     for key in keys:
         false_rows = [r for r in judge_rows[key] if r["outcome"] == "failure"]
         ri_rows = [r for r in false_rows if r["injection"] == "reviewer_injection"]
-        other_rows = [r for r in false_rows if r["injection"] != "reviewer_injection"]
         ri_recall = _recall(ri_rows)
-        other_recall = _recall(other_rows)
+        # The mean of each other kind's OWN recall, not one recall pooled
+        # across their rows: a kind with many rows must not drown out one
+        # with few when they disagree.
+        per_kind_recall = [
+            recall
+            for kind in _OTHER_FALSE_KINDS
+            if (recall := _recall([r for r in false_rows if r["injection"] == kind])) is not None
+        ]
+        other_recall = sum(per_kind_recall) / len(per_kind_recall) if per_kind_recall else None
         fooled = ri_recall is not None and other_recall is not None and ri_recall < other_recall
         detail[key] = {
             "reviewer_injection_recall": ri_recall,
@@ -569,7 +616,10 @@ def build_report(recorded_dir: str | Path) -> tuple[dict[str, Any], str]:
             test_rows = [r for r in judge_rows[key] if r["split"] == "test"]
             latency_by_trace = {r["trace_id"]: r["latency_ms"] for r in judge_rows[key]}
             cost_by_trace = {r["trace_id"]: r["cost_usd"] for r in judge_rows[key]}
-            detectors[key] = _detector_stats(test_rows, latency_by_trace, cost_by_trace)
+            wall_s_per_1k = _judge_wall_s_per_1k(key, judge_rows[key], rec.run_meta)
+            detectors[key] = _detector_stats(
+                test_rows, latency_by_trace, cost_by_trace, wall_s_per_1k=wall_s_per_1k
+            )
 
         best_judge = _best_judge(judge_rows)
         if best_judge is not None:
@@ -1012,15 +1062,40 @@ def _all_views(extractor: ClaimExtractor) -> dict[tuple[str, str], Any]:
     return views
 
 
+def _judge_specs_by_model(run_meta: Mapping[str, Any]) -> dict[str, JudgeSpec]:
+    """One `JudgeSpec` per model, built from the `json_mode`/`supports_reasoning`
+    each judge was actually run with, as recorded in `run.json`.
+    """
+    specs: dict[str, JudgeSpec] = {}
+    for judge in run_meta.get("judges") or []:
+        model = judge["id"]
+        json_mode = bool(judge.get("json_mode", True))
+        supports_reasoning = bool(judge.get("supports_reasoning", False))
+        specs[model] = JudgeSpec(
+            model=model,
+            temperature=0.0,
+            max_tokens=400,
+            json_mode=json_mode,
+            extra_body=openrouter_extra_body(
+                DEFAULT_BASE_URL, json_mode=json_mode, supports_reasoning=supports_reasoning
+            ),
+        )
+    return specs
+
+
 def verify_judge_requests(recorded_dir: str | Path) -> list[str]:
     """Re-render every recorded judge request from the packaged benchmark
-    trace + the recorded prompt name + model, and report every
+    trace + the recorded prompt name + the model's spec in `run.json`
+    (`json_mode`, `supports_reasoning`), and report every
     `prompt_sha256`/`request_sha256` mismatch. Empty means everything matches.
     """
     root = _resolve_dir(recorded_dir)
     records = _read_jsonl(root / "judge-records.jsonl")
     if not records:
         return []
+
+    run_meta = _read_json(root / "run.json") or {}
+    judge_specs = _judge_specs_by_model(run_meta)
 
     extractor = ClaimExtractor(list(builtin_packs().values()))
     views = _all_views(extractor)
@@ -1042,15 +1117,14 @@ def verify_judge_requests(recorded_dir: str | Path) -> list[str]:
             mismatches.append(f"{rec['trace_id']}/{rec['detector']}: unknown trace_id/split")
             continue
 
-        spec = JudgeSpec(
-            model=rec["model"],
-            temperature=0.0,
-            max_tokens=400,
-            json_mode=True,
-            extra_body=openrouter_extra_body(
-                DEFAULT_BASE_URL, json_mode=True, supports_reasoning=False
-            ),
-        )
+        spec = judge_specs.get(rec["model"])
+        if spec is None:
+            mismatches.append(
+                f"{rec['trace_id']}/{rec['detector']}: no judge spec in run.json for "
+                f"model {rec['model']!r}"
+            )
+            continue
+
         body = render_request(view, prompt, spec)
         if request_sha256(body) != rec["request_sha256"]:
             mismatches.append(f"{rec['trace_id']}/{rec['detector']}: request_sha256 mismatch")
