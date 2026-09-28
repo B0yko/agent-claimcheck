@@ -25,7 +25,7 @@ Checker(
     config=None,  # an agent_claimcheck.config.Config, or Checker.from_config(path)
     rules=(),  # extra rule pack paths, on top of the built-in packs
     prompt=None,  # a judge/cascade prompt: a built-in name or a file path
-    calibration=None,  # a CalibratorSet, a path to one, or None for the built-in set
+    calibration=None,  # a CalibratorSet or a path to one; None uses [classifier] calibration, else the built-in set
     thresholds=None,  # a gate.Thresholds, or None for the config's/defaults'
     max_usd=None,  # live judge budget cap; None uses the config's
     price=None,  # a ledger.Price(price_in_per_m, price_out_per_m) for the judge; beats the config's

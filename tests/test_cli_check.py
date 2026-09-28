@@ -314,6 +314,53 @@ def test_an_input_with_only_invalid_lines_exits_2(tmp_path: Path) -> None:
     assert "line 1:" in result.stderr
 
 
+def test_config_calibration_applies_and_the_flag_beats_it(tmp_path: Path) -> None:
+    def calibration_file(name: str, a: float, b: float) -> Path:
+        path = tmp_path / name
+        path.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "fitted_on": name,
+                    "base_rate": 0.6,
+                    "calibrators": {
+                        "rules": {
+                            "method": "platt",
+                            "a": a,
+                            "b": b,
+                            "clip": 1e-6,
+                            "n": 10,
+                            "n_pos": 5,
+                            "fitted_on": name,
+                            "detector": "rules",
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        return path
+
+    configured = calibration_file("configured.json", 0.05, -1.0)
+    config_path = tmp_path / "claimcheck.toml"
+    config_path.write_text(f'[classifier]\ncalibration = "{configured}"\n', encoding="utf-8")
+    base = ["check", "example:mixed", "--detector", "rules", "--format", "jsonl"]
+
+    def booking_01(extra: list[str]) -> dict[str, Any]:
+        result = runner.invoke(app, [*base, "--config", str(config_path), *extra])
+        assert "built-in calibrators were fitted" not in result.stderr
+        rows = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
+        return next(r for r in rows if r["trace_id"] == "booking-01")
+
+    # From the config: raw 0.70 maps to ~0.277 (the same a/b as the --calibration test above).
+    assert booking_01([])["p_success"] == pytest.approx(0.27735193561025356)
+    # The flag wins: a=1, b=0 is the identity.
+    identity = calibration_file("identity.json", 1.0, 0.0)
+    assert booking_01(["--calibration", str(identity)])["p_success"] == pytest.approx(
+        0.70, abs=1e-6
+    )
+
+
 # --------------------------------------------------------------- live judge --
 
 _VALID_CONTENT = json.dumps(

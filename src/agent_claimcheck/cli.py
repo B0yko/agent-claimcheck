@@ -214,7 +214,9 @@ def check(
         None, "--prompt", help="Custom judge prompt file (judge/cascade only)."
     ),
     calibration: str | None = typer.Option(
-        None, "--calibration", help="CalibratorSet JSON file (overrides the built-in one)."
+        None,
+        "--calibration",
+        help="CalibratorSet JSON file (overrides [classifier] calibration and the built-in set).",
     ),
     out: str | None = typer.Option(
         None, "--out", help="Write every result as a JSON Lines file at this path."

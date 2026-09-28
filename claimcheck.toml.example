@@ -30,7 +30,7 @@ non_success_types = ["failed", "blocked", "gave_up", "needs_input", "partial"]  
 
 [classifier]
 # model = "models/lr-v1.json"          # path to a classifier artifact JSON; unset uses the shipped models/lr-v1.json
-# calibration = "models/calibrators-v1.json"  # path to a CalibratorSet JSON; unset uses the shipped calibrators
+# calibration = "models/calibrators-v1.json"  # path to a CalibratorSet JSON (--calibration wins); unset uses the shipped calibrators
 
 # Not read from this file: CLAIMCHECK_LEDGER and CLAIMCHECK_LEDGER_CAP_USD
 # are environment variables only (see .env.example), so a ledger path or

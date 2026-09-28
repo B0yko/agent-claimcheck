@@ -147,6 +147,10 @@ class Checker:
         ]
         self.extractor = ClaimExtractor(self.packs, self.non_success_types)
 
+        # Precedence: the argument (or --calibration), then [classifier]
+        # calibration from the config, then the packaged set.
+        if calibration is None:
+            calibration = self.config.classifier.calibration
         self.calibrators: CalibratorSet | None
         if isinstance(calibration, CalibratorSet):
             self.calibrators = calibration

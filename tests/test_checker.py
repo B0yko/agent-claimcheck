@@ -14,7 +14,7 @@ from factory import probe, tool_call, tool_result, trace
 
 from agent_claimcheck.calibration import Calibrator, CalibratorSet
 from agent_claimcheck.checker import Checker, CheckResult, dump_result
-from agent_claimcheck.config import Config, JudgeConfig
+from agent_claimcheck.config import ClassifierConfig, Config, JudgeConfig, load_config
 from agent_claimcheck.detectors.base import DetectorOutput, Reason, register_detector
 from agent_claimcheck.gate import Thresholds, UnknownPriceError
 from agent_claimcheck.ledger import Price
@@ -301,3 +301,72 @@ def test_judge_detector_still_abstains_per_trace_without_a_price(
     [result] = list(checker.check([_booked_trace("t1")]))
     assert result.abstain_reason == "unknown_price"
     assert result.verdict == "unverifiable"
+
+
+# ------------------------------------------------------ configured calibration --
+
+
+def _rules_calibrators(a: float, b: float) -> CalibratorSet:
+    return CalibratorSet(
+        version=1,
+        fitted_on="test",
+        base_rate=0.6,
+        calibrators={
+            "rules": Calibrator(
+                method="platt",
+                a=a,
+                b=b,
+                clip=1e-6,
+                n=10,
+                n_pos=5,
+                fitted_on="test",
+                detector="rules",
+            )
+        },
+    )
+
+
+def test_config_calibration_is_used_when_no_argument_is_given(tmp_path: Path) -> None:
+    path = tmp_path / "calibration.json"
+    _rules_calibrators(0.05, -1.0).save(path)
+    config = Config(classifier=ClassifierConfig(calibration=str(path)))
+
+    checker = Checker("rules", config=config)
+    assert checker.calibrators_builtin is False
+    [result] = list(checker.check([_booked_trace("t1")]))
+    # The configured set pulls the raw 0.97 down (sigmoid(0.05 * logit(0.97) - 1.0) ~ 0.30);
+    # the built-in set would leave it verified.
+    assert result.p_success_raw == pytest.approx(0.97)
+    assert result.calibrated is True
+    assert result.p_success == pytest.approx(0.30, abs=0.01)
+    assert result.verdict == "unverifiable"
+
+
+def test_config_calibration_is_read_from_the_toml_file(tmp_path: Path) -> None:
+    path = tmp_path / "calibration.json"
+    _rules_calibrators(0.05, -1.0).save(path)
+    toml = tmp_path / "claimcheck.toml"
+    toml.write_text(f'[classifier]\ncalibration = "{path}"\n', encoding="utf-8")
+
+    checker = Checker.from_config(toml, detector="rules")
+    assert checker.calibrators_builtin is False
+    assert checker.calibrators is not None
+    assert checker.calibrators.fitted_on == "test"
+
+
+def test_calibration_argument_beats_the_config(tmp_path: Path) -> None:
+    configured = tmp_path / "configured.json"
+    _rules_calibrators(0.05, -1.0).save(configured)
+    config = Config(classifier=ClassifierConfig(calibration=str(configured)))
+
+    explicit = _rules_calibrators(1.0, 0.0)
+    checker = Checker("rules", config=config, calibration=explicit)
+    assert checker.calibrators is explicit
+    [result] = list(checker.check([_booked_trace("t1")]))
+    assert result.p_success == pytest.approx(0.97, abs=0.001)  # a=1, b=0 is the identity
+    assert result.verdict == "verified"
+
+
+def test_builtin_calibrators_when_neither_argument_nor_config_names_one() -> None:
+    assert Checker("rules", config=load_config(None)).calibrators_builtin is True
+    assert Checker("rules", config=Config()).calibrators_builtin is True
