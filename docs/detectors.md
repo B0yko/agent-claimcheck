@@ -72,7 +72,12 @@ leave-one-domain-out evaluation with the guard off.
 `agent-claimcheck train <labelled.jsonl|alias> --out DIR [--calibrate rules]`
 retrains both the classifier artifact and its calibrator(s) on the caller's
 own labelled traces (traces without a resolved ground truth, or without a
-success claim, are skipped and the counts are reported).
+success claim, are skipped and the counts are reported). It exits 2 when fewer
+than 5 of the remaining traces are successes, or fewer than 5 are failures,
+because the cross-validation needs five folds of each. A calibrator whose raw
+scores take fewer than two distinct values (say, a rule pack that scores every
+trace alike) would only be a constant, so it is skipped with a printed note
+instead of being written.
 
 ## LLM judge (`detectors/judge.py`)
 

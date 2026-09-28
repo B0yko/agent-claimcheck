@@ -19,6 +19,13 @@ from agent_claimcheck.schema import TraceValidationError, load_traces_report
 #: `train --calibrate` keys accepted by this build.
 _SUPPORTED_CALIBRATE_KEYS = ("rules", "judge")
 
+#: `train` needs at least this many labelled traces of each outcome: the
+#: classifier's cross-validation splits every outcome into five folds.
+_MIN_PER_OUTCOME = 5
+
+#: Raw scores this close are one value as far as a calibrator can tell.
+_SCORE_DECIMALS = 9
+
 _Verdict = Literal["verified", "false_success", "unverifiable", "skipped"]
 
 #: Verdicts `check --fail-on` and the summary line may name.
@@ -28,12 +35,32 @@ app = typer.Typer(add_completion=False, no_args_is_help=True)
 dataset_app = typer.Typer(add_completion=False, no_args_is_help=True)
 app.add_typer(dataset_app, name="dataset")
 console = Console()
-error_console = Console(stderr=True)
+#: Diagnostics are single lines that scripts grep: never wrapped at the
+#: terminal width, and never read as rich markup (a `[judge]` table name or an
+#: exception's bracketed text would otherwise vanish).
+error_console = Console(stderr=True, soft_wrap=True, markup=False)
 
 
 @app.callback()
 def _callback() -> None:
     """Check AI agent success claims against trace evidence."""
+
+
+def _distinct_scores(raw_p: list[float]) -> int:
+    return len({round(p, _SCORE_DECIMALS) for p in raw_p})
+
+
+def _calibration_skipped(name: str, raw_p: list[float]) -> bool:
+    """Print a note and return True when `raw_p` cannot support a calibrator."""
+    distinct = _distinct_scores(raw_p)
+    if distinct >= 2:
+        return False
+    console.print(
+        f"note: skipped the {name} calibrator: its raw scores take {distinct} distinct value(s), "
+        "and a calibrator needs at least 2",
+        soft_wrap=True,
+    )
+    return True
 
 
 @app.command()
@@ -81,7 +108,7 @@ def train(
     ),
 ) -> None:
     """Train the classifier-lr artifact and its calibrator(s) on labelled traces."""
-    from agent_claimcheck.calibration import CalibratorSet, fit_calibrator
+    from agent_claimcheck.calibration import Calibrator, CalibratorSet, fit_calibrator
     from agent_claimcheck.checker import Checker
     from agent_claimcheck.claims import ClaimExtractor, success_claims
     from agent_claimcheck.config import load_config
@@ -132,6 +159,15 @@ def train(
     if not views:
         error_console.print("error: no labelled traces with a success claim to train on")
         raise typer.Exit(code=2)
+    n_success = sum(labels)
+    n_failure = len(labels) - n_success
+    if min(n_success, n_failure) < _MIN_PER_OUTCOME:
+        error_console.print(
+            f"error: need at least {_MIN_PER_OUTCOME} labelled traces of each outcome to train, "
+            f"got {n_success} success and {n_failure} failure "
+            "(among those with a success claim)"
+        )
+        raise typer.Exit(code=2)
 
     artifact = train_lr(views, labels, domains, seed=0)
     out_dir = Path(out)
@@ -141,9 +177,11 @@ def train(
     )
 
     oof = oof_predictions(views, labels, seed=0)
-    calibrators = {
-        "classifier-lr": fit_calibrator("classifier-lr", oof, labels, fitted_on=str(input_file))
-    }
+    calibrators: dict[str, Calibrator] = {}
+    if not _calibration_skipped("classifier-lr", oof):
+        calibrators["classifier-lr"] = fit_calibrator(
+            "classifier-lr", oof, labels, fitted_on=str(input_file)
+        )
     if "rules" in calibrate_keys:
         rules_detector = RulesDetector()
         raw_p: list[float] = []
@@ -154,7 +192,7 @@ def train(
                 continue
             raw_p.append(rules_output.p_success)
             raw_labels.append(label)
-        if raw_p:
+        if not _calibration_skipped("rules", raw_p):
             calibrators["rules"] = fit_calibrator(
                 "rules", raw_p, raw_labels, fitted_on=str(input_file)
             )
@@ -178,7 +216,7 @@ def train(
             f"judge {judge_detector.name}: scored {len(judge_raw_p)}/{len(views)} traces "
             f"(the rest abstained)"
         )
-        if judge_raw_p:
+        if not _calibration_skipped(judge_detector.name, judge_raw_p):
             calibrators[judge_detector.name] = fit_calibrator(
                 judge_detector.name, judge_raw_p, judge_raw_labels, fitted_on=str(input_file)
             )
@@ -305,9 +343,7 @@ def check(
         )
         checker.require_price()
     except UnknownPriceError as exc:
-        # One unwrapped line; the message names a `[judge]` table, which rich
-        # would otherwise read as markup and drop.
-        error_console.print(f"error: {exc.args[0]}", markup=False, soft_wrap=True)
+        error_console.print(f"error: {exc.args[0]}")
         raise typer.Exit(code=2) from None
     except (OSError, ValueError, RulePackError, PromptError, ResourceNotFoundError) as exc:
         error_console.print(f"error: {exc}")
