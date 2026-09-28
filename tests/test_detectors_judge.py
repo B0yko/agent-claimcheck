@@ -316,6 +316,53 @@ def test_ledger_cap_abstains_without_http_call(tmp_path: Path) -> None:
     assert output.abstain_reason == "ledger_cap"
 
 
+def test_unknown_price_with_budget_abstains_before_http_call() -> None:
+    price_book = PriceBook()  # no override, no config, no client: every model is unknown
+    budget = Budget(max_usd=100.0)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise AssertionError("unknown_price must refuse before any HTTP call")
+
+    transport = httpx.MockTransport(handler)
+    detector = JudgeDetector(
+        model="vendor/unknown-model",
+        api_key="k",
+        extra_body={},
+        budget=budget,
+        price_book=price_book,
+        transport=transport,
+    )
+    output = detector.score(_view())
+    assert output.abstain is True
+    assert output.abstain_reason == "unknown_price"
+    assert output.p_success == 0.6
+
+
+def test_unknown_price_book_and_ledger_without_budget_abstains_before_http_call(
+    tmp_path: Path,
+) -> None:
+    price_book = PriceBook()  # no override, no config, no client: every model is unknown
+    ledger = Ledger(tmp_path / "ledger.jsonl")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise AssertionError("unknown_price must refuse before any HTTP call")
+
+    transport = httpx.MockTransport(handler)
+    detector = JudgeDetector(
+        model="vendor/unknown-model",
+        api_key="k",
+        extra_body={},
+        price_book=price_book,
+        ledger=ledger,
+        transport=transport,
+    )
+    output = detector.score(_view())
+    assert output.abstain is True
+    assert output.abstain_reason == "unknown_price"
+    ledger_path = tmp_path / "ledger.jsonl"
+    assert not ledger_path.exists() or ledger_path.read_text() == ""
+
+
 def test_ledger_records_a_line_per_call_with_no_trace_content(tmp_path: Path) -> None:
     path = tmp_path / "ledger.jsonl"
     ledger = Ledger(path)

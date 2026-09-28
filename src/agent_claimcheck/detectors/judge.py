@@ -2,9 +2,9 @@
 
 Wires the pieces in `judge/` and `ledger.py` together: render the request,
 check the cache, reserve budget, call the model, settle and log the spend,
-then parse the answer. Every abstain path (`no_api_key`, `budget_exhausted`,
-`ledger_cap`, the client's error codes, `parse_error`) reports the
-configured base rate.
+then parse the answer. Every abstain path (`no_api_key`, `unknown_price`,
+`budget_exhausted`, `ledger_cap`, the client's error codes, `parse_error`)
+reports the configured base rate.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ import httpx
 
 from agent_claimcheck.config import DEFAULT_BASE_URL, resolve_api_key
 from agent_claimcheck.detectors.base import DetectorOutput, Reason, register_detector
+from agent_claimcheck.gate import UnknownPriceError
 from agent_claimcheck.judge.cache import JudgeCache, cache_key
 from agent_claimcheck.judge.client import JudgeClient
 from agent_claimcheck.judge.parse import ParseError, parse_judgment
@@ -158,6 +159,13 @@ class JudgeDetector:
         if self._api_key is None:
             return self._abstain("no_api_key")
 
+        list_price = Price(price_in_per_m=0.0, price_out_per_m=0.0)
+        if self._price_book is not None:
+            try:
+                list_price = self._price_book.list_price(self._model)
+            except UnknownPriceError:
+                return self._abstain("unknown_price")
+
         reservation = None
         if self._budget is not None and self._price_book is not None:
             amount = reservation_usd(
@@ -187,11 +195,6 @@ class JudgeDetector:
             return self._abstain(response.error_code or "network", latency_ms=response.latency_ms)
 
         assert response.content is not None
-        list_price = (
-            self._price_book.list_price(self._model)
-            if self._price_book is not None
-            else Price(price_in_per_m=0.0, price_out_per_m=0.0)
-        )
         actual = actual_cost_usd(response.usage, list_price)
         if reservation is not None and self._budget is not None:
             self._budget.settle(reservation, actual)
