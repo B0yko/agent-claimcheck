@@ -41,3 +41,12 @@ def test_rule_packs_are_included_in_the_wheel(wheel: zipfile.ZipFile) -> None:
         packaged_path = f"agent_claimcheck/rules/packs/{pack}.yaml"
         assert packaged_path in names
         assert wheel.read(packaged_path) == (packs_dir / f"{pack}.yaml").read_bytes()
+
+
+def test_benchmark_v1_is_included_in_the_wheel(wheel: zipfile.ZipFile) -> None:
+    names = set(wheel.namelist())
+    bench_dir = REPO_ROOT / "benchmark" / "v1"
+    for filename in ("traces.train.jsonl", "traces.test.jsonl", "manifest.json", "DATASET_CARD.md"):
+        packaged_path = f"agent_claimcheck/_data/benchmark/v1/{filename}"
+        assert packaged_path in names
+        assert wheel.read(packaged_path) == (bench_dir / filename).read_bytes()

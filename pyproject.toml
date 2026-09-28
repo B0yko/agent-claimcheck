@@ -41,6 +41,7 @@ packages = ["src/agent_claimcheck"]
 [tool.hatch.build.targets.wheel.force-include]
 "schemas/agent-trace-v1.json" = "agent_claimcheck/schemas/agent-trace-v1.json"
 "examples" = "agent_claimcheck/_data/examples"
+"benchmark/v1" = "agent_claimcheck/_data/benchmark/v1"
 
 [tool.ruff]
 line-length = 100
