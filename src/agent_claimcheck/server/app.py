@@ -540,6 +540,10 @@ class Handler(BaseHTTPRequestHandler):
                 "overview": ctx.store.overview(),
                 "queue": queue,
                 "judge_configured": ctx.judge_available,
+                "thresholds": {
+                    "verified": ctx.thresholds.verified,
+                    "false_success": ctx.thresholds.false_success,
+                },
             }
         )
 

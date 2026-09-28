@@ -370,6 +370,15 @@ def test_serve_bench_test_state_has_a_non_empty_queue() -> None:
     assert distances == sorted(distances)
 
 
+def test_state_exposes_the_gate_thresholds_for_the_probability_meters(
+    dashboard_with_traces: tuple[DashboardServer, httpx.Client],
+) -> None:
+    _server, client = dashboard_with_traces
+    state = client.get("/api/state").json()
+
+    assert state["thresholds"] == {"verified": 0.8, "false_success": 0.2}
+
+
 # -- judge estimate ------------------------------------------------------------
 
 
