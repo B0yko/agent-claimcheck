@@ -21,6 +21,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 _CHECKED_GLOBS: tuple[str, ...] = (
     "docs/*.md",
     "docs/adr/*.md",
+    "README.md",
     "examples/README.md",
     "CONTRIBUTING.md",
     "SECURITY.md",
