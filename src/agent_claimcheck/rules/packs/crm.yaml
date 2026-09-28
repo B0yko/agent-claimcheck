@@ -12,7 +12,6 @@ claims:
     action: "crm.update_contact"
     receipt:
       record_id: { equals: "{subject.record_id}", as: string }
-      updated_fields: { exists: true }
     probe: "crm.read_record"
     probe_checks:
       fields: { contains: "{subject.fields}" }

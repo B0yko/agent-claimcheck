@@ -557,3 +557,39 @@ def test_coding_tests_passed_rule_still_verifies_the_full_suite() -> None:
         subject, "tests_passed", domain="coding", steps=steps, packs=list(packs.values())
     )
     assert outcome.outcome == "probe_supported"
+
+
+# --- the documented async-accepted (202) receipts are receipts too ----
+
+
+def test_crm_updated_accepts_the_async_accepted_receipt() -> None:
+    packs = builtin_packs()
+    steps = [
+        tool_call(0, "crm.update_contact", args={"record_id": "c1"}),
+        tool_result(
+            1,
+            "crm.update_contact",
+            output={"record_id": "c1", "job_id": "job-1", "status": "accepted"},
+        ),
+    ]
+    subject = {"object": "contact", "record_id": "c1", "fields": {"phone": "+1-555-0100"}}
+    outcome = evaluate_claim(
+        subject, "updated", domain="crm", steps=steps, packs=list(packs.values())
+    )
+    assert outcome.outcome == "receipt_only"
+
+
+def test_coding_fixed_accepts_the_async_accepted_receipt() -> None:
+    packs = builtin_packs()
+    steps = [
+        tool_call(0, "fs.write_file", args={"path": "src/app.py", "content": "x"}),
+        tool_result(
+            1,
+            "fs.write_file",
+            output={"path": "src/app.py", "job_id": "job-2", "status": "pending"},
+        ),
+    ]
+    outcome = evaluate_claim(
+        {"file": "src/app.py"}, "fixed", domain="coding", steps=steps, packs=list(packs.values())
+    )
+    assert outcome.outcome == "receipt_only"

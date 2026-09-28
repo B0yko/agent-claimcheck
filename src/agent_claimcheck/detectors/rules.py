@@ -8,7 +8,13 @@ from agent_claimcheck.claims import success_claims
 from agent_claimcheck.config import DEFAULT_NON_SUCCESS_TYPES
 from agent_claimcheck.detectors.base import DetectorOutput, Reason, register_detector
 from agent_claimcheck.redact import DetectorView
-from agent_claimcheck.rules.engine import OUTCOME_ORDER, RULE_SCORES, RulePack, evaluate_claim
+from agent_claimcheck.rules.engine import (
+    OUTCOME_ORDER,
+    RULE_SCORES,
+    RulePack,
+    builtin_packs,
+    evaluate_claim,
+)
 
 #: Reported as `p_success` when the rules detector abstains (no applicable
 #: rule pack defines any of the trace's success claims).
@@ -22,11 +28,12 @@ class RulesDetector:
 
     def __init__(
         self,
-        packs: Sequence[RulePack] = (),
+        packs: Sequence[RulePack] | None = None,
         non_success_types: Sequence[str] = DEFAULT_NON_SUCCESS_TYPES,
         base_rate: float = DEFAULT_BASE_RATE,
     ) -> None:
-        self.packs = list(packs)
+        # No packs given means the built-in ones; pass [] explicitly for none.
+        self.packs = list(builtin_packs().values()) if packs is None else list(packs)
         self.non_success_types = tuple(non_success_types)
         self.base_rate = base_rate
 

@@ -19,7 +19,7 @@ claims:
     action: "fs.write_file"
     receipt:
       args.path: { equals: "{subject.file}" }
-      bytes_written: { exists: true }
+      path: { equals: "{subject.file}" }
     probe: "ci.run_tests"
     probe_checks:
       failed: { equals: 0, as: number }

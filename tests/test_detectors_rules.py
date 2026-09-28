@@ -135,5 +135,8 @@ def test_bare_stage_word_does_not_spuriously_downgrade_a_real_update() -> None:
     view = resolve_claims(detector_view(t), ClaimExtractor(PACKS))
     detector = RulesDetector(packs=PACKS)
     output = detector.score(view)
-    assert output.p_success == 0.97
+    # The extracted claim has no subject, so every value check is skipped and
+    # the claim is capped at receipt_only; the bare word "stage" must not add
+    # an unsupported stage_changed claim on top.
+    assert output.p_success == 0.70
     assert {c.type for c in view.final_claim.claims} == {"updated"}
