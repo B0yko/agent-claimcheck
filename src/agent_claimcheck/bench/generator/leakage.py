@@ -15,7 +15,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold
 
 
-def _rank_auroc(scores: np.ndarray, labels: np.ndarray) -> float:
+def rank_auroc(scores: np.ndarray, labels: np.ndarray) -> float:
     """AUROC by the Mann-Whitney rank method, ties averaged (metrics.py's
     method), positive = label 1.
     """
@@ -54,4 +54,4 @@ def leakage_auroc(texts: list[str], labels: list[int]) -> float:
         model = LogisticRegression(C=1.0, solver="lbfgs", max_iter=1000)
         model.fit(x_train, y[train_idx])
         oof[test_idx] = model.predict_proba(x_test)[:, list(model.classes_).index(1)]
-    return _rank_auroc(oof, y)
+    return rank_auroc(oof, y)

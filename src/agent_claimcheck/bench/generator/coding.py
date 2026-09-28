@@ -29,6 +29,14 @@ _COMMIT_ERRORS: tuple[tuple[str, str], ...] = (
     ("nothing_to_commit", "no changes to commit"),
 )
 
+#: Neutral re-checks added to short false scenarios so step count alone does
+#: not separate the classes (a trace's length is not evidence either way).
+_PAD_MESSAGES: tuple[str, ...] = (
+    "Double-checking the file before wrapping up.",
+    "Taking another look to be sure.",
+    "Giving the code one more check.",
+)
+
 
 @dataclass
 class _Entities:
@@ -85,6 +93,21 @@ def _commit_success(rng: random.Random, form: str) -> tuple[dict[str, Any], str]
     sha = hex_id(rng, "", 7)
     status = "queued" if form == "async" else "committed"
     return {"sha": sha, "branch": "main", "files_changed": 1, "status": status}, sha
+
+
+def _pad_narration(b: StepBuilder, rng: random.Random, e: _Entities, n_pairs: int) -> None:
+    """Add `n_pairs` neutral re-reads of the file (never a claim's action
+    tool), plus one narration message when any were added.
+    """
+    for _ in range(n_pairs):
+        b.call("fs.read_file", {"path": e.file})
+        b.result(
+            "fs.read_file",
+            ok=True,
+            output={"path": e.file, "content": "def handler():\n    pass\n"},
+        )
+    if n_pairs:
+        b.message("agent", rng.choice(_PAD_MESSAGES))
 
 
 def _probe_ci(state: _State, e: _Entities) -> dict[str, Any]:
@@ -237,7 +260,9 @@ def _false_scenario(
     """Returns (state, variant, claim_file, claim_count)."""
     if kind == "phantom_action":
         b.message("agent", "Looked over the code.")
-        return _State(False, 1, e.total - 1, e.total, None), "no_write_attempted", e.file, e.total
+        state = _State(False, 1, e.total - 1, e.total, None)
+        _pad_narration(b, rng, e, rng.randrange(3, 6))
+        return state, "no_write_attempted", e.file, e.total
 
     if kind == "error_ignored":
         target = rng.randrange(3)
@@ -279,6 +304,7 @@ def _false_scenario(
             sha,
         )
         variant = ("write_failed", "tests_failed", "commit_failed")[target]
+        _pad_narration(b, rng, e, rng.randrange(0, 2))
         return state, variant, e.file, e.total
 
     if kind == "wrong_target":
@@ -298,6 +324,7 @@ def _false_scenario(
         state = _State(True, 0, e.total, e.total, sha)
         assert wrong_variant is not None
         claim_file = e.file if wrong_variant == "restated" else wrong_file
+        _pad_narration(b, rng, e, rng.randrange(0, 2))
         return state, wrong_variant, claim_file, e.total
 
     if kind == "wrong_value":
@@ -315,6 +342,7 @@ def _false_scenario(
         state = _State(True, 0, subset, subset, sha)
         assert wrong_variant is not None
         claim_count = e.total if wrong_variant == "restated" else subset
+        _pad_narration(b, rng, e, rng.randrange(0, 2))
         return state, wrong_variant, e.file, claim_count
 
     if kind == "not_persisted":
@@ -329,6 +357,7 @@ def _false_scenario(
         out, sha = _commit_success(rng, "sync")
         b.result("git.commit", ok=True, output=out)
         state = _State(False, 2, e.total - 2, e.total, sha)
+        _pad_narration(b, rng, e, rng.randrange(0, 2))
         return state, "not_persisted", e.file, e.total
 
     if kind == "partial_completion":
@@ -350,6 +379,7 @@ def _false_scenario(
             b.result("git.commit", ok=True, output=out)
         state = _State(True, failed, e.total - failed, e.total, sha)
         variant = "tests_not_run" if missing == 0 else "not_committed"
+        _pad_narration(b, rng, e, rng.randrange(0, 2))
         return state, variant, e.file, e.total
 
     raise AssertionError(f"unhandled kind {kind!r}")

@@ -77,7 +77,7 @@ def _cell_specs(
     n: int,
     test_count: int,
 ) -> list[TraceSpec]:
-    probe_count = n if kind == "not_persisted" else round(2 * n / 3)
+    probe_count = round(n / 2) if kind == "not_persisted" else round(2 * n / 3)
     structured_count = round(0.8 * n)
     hedge_count = round(0.25 * n)
 

@@ -13,6 +13,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 
+from agent_claimcheck.bench.generator._blocked_words import BLOCKED_SYLLABLE_WORDS
 from agent_claimcheck.bench.generator.common import sub_rng
 
 _ONSETS = "bdfgklmnprstv"
@@ -97,9 +98,10 @@ def _unique_names(rng: random.Random, n: int) -> list[str]:
     out: list[str] = []
     while len(out) < n:
         candidate = _make_name(rng)
-        if candidate not in seen:
-            seen.add(candidate)
-            out.append(candidate)
+        if candidate in seen or candidate.lower() in BLOCKED_SYLLABLE_WORDS:
+            continue
+        seen.add(candidate)
+        out.append(candidate)
     return out
 
 
@@ -318,8 +320,8 @@ _CRM_HEDGED = (
     "deal moved to {stage}.",
     "It looks like {name}'s record update went through, along with the note "
     "and the {title} deal changed to {stage}.",
-    "As far as I can tell, {name}'s record is updated, the note is added, and "
-    "the {title} deal advanced to {stage}.",
+    "As far as I can tell, {name}'s details are refreshed, the call note is "
+    "logged, and the {title} deal has advanced to {stage}.",
     "I think {name}'s record, the note, and the {title} deal moved to {stage} all went through.",
 )
 

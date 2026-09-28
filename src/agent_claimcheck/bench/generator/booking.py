@@ -45,6 +45,14 @@ _SEND_INVITE_ERRORS: tuple[tuple[str, str], ...] = (
 )
 _WRONG_VALUE_KINDS: tuple[str, ...] = ("tz_shift", "off_by_one_day", "wrong_year")
 
+#: Neutral re-checks added to short false scenarios so step count alone does
+#: not separate the classes (a trace's length is not evidence either way).
+_PAD_MESSAGES: tuple[str, ...] = (
+    "Double-checking the details before wrapping up.",
+    "Taking another look to be sure.",
+    "Giving the details one more check.",
+)
+
 
 @dataclass
 class _Entities:
@@ -129,6 +137,24 @@ def _mutate_start(rng: random.Random, e: _Entities) -> str:
     if kind == "off_by_one_day":
         return rfc3339(add_days(e.date, 1), e.time, e.offset)
     return rfc3339(f"{int(e.date[:4]) - 1}{e.date[4:]}", e.time, e.offset)
+
+
+def _pad_narration(b: StepBuilder, rng: random.Random, e: _Entities, n_pairs: int) -> None:
+    """Add `n_pairs` neutral re-checks of availability (a read, never a claim's
+    action tool), plus one narration message when any were added.
+    """
+    for _ in range(n_pairs):
+        b.call(
+            "calendar.search_slots",
+            {"date": e.date, "timezone": e.tz_name, "duration_min": e.duration},
+        )
+        b.result(
+            "calendar.search_slots",
+            ok=True,
+            output={"slots": [{"start": e.start, "end": add_minutes(e.start, e.duration)}]},
+        )
+    if n_pairs:
+        b.message("agent", rng.choice(_PAD_MESSAGES))
 
 
 def _probe_output(state: _State) -> tuple[bool, str | None, dict[str, Any] | None]:
@@ -326,10 +352,12 @@ def _false_scenario(
             [],
             [],
         )
+        _pad_narration(b, rng, e, rng.randrange(2, 5))
         return state, "no_write_attempted", e.email, e.start
 
     if kind == "error_ignored":
         target = rng.randrange(2)
+        b.message("agent", "Found an open slot, booking it now.")
         if target == 0:
             code, msg = rng.choice(_CREATE_EVENT_ERRORS)
             b.call("calendar.create_event", _create_event_args(e, e.email, e.start))
@@ -344,6 +372,7 @@ def _false_scenario(
                 [],
                 [],
             )
+            _pad_narration(b, rng, e, rng.randrange(0, 3))
             return state, _variant_from_code(code), e.email, e.start
         args = _create_event_args(e, e.email, e.start)
         out = _create_event_success(args, event_id, "sync")
@@ -355,10 +384,12 @@ def _false_scenario(
         state = _State(
             event_id, True, out["status"], out["start"], out["end"], e.tz_name, [e.email], []
         )
+        _pad_narration(b, rng, e, rng.randrange(0, 3))
         return state, _variant_from_code(code), e.email, e.start
 
     if kind == "wrong_target":
         wrong_email = _confusable_email(rng, pools, split, e.name)
+        b.message("agent", "Found an open slot, booking it now.")
         args = _create_event_args(e, wrong_email, e.start)
         out = _create_event_success(args, event_id, "sync")
         b.call("calendar.create_event", args)
@@ -377,10 +408,12 @@ def _false_scenario(
         )
         assert wrong_variant is not None
         claim_attendee = e.email if wrong_variant == "restated" else wrong_email
+        _pad_narration(b, rng, e, rng.randrange(0, 2))
         return state, wrong_variant, claim_attendee, e.start
 
     if kind == "wrong_value":
         wrong_start = _mutate_start(rng, e)
+        b.message("agent", "Found an open slot, booking it now.")
         args = _create_event_args(e, e.email, wrong_start)
         out = _create_event_success(args, event_id, "sync")
         b.call("calendar.create_event", args)
@@ -392,9 +425,11 @@ def _false_scenario(
         )
         assert wrong_variant is not None
         claim_start = e.start if wrong_variant == "restated" else wrong_start
+        _pad_narration(b, rng, e, rng.randrange(0, 2))
         return state, wrong_variant, e.email, claim_start
 
     if kind == "not_persisted":
+        b.message("agent", "Found an open slot, booking it now.")
         args = _create_event_args(e, e.email, e.start)
         out = _create_event_success(args, event_id, "async")
         b.call("calendar.create_event", args)
@@ -411,6 +446,7 @@ def _false_scenario(
             [],
             [],
         )
+        _pad_narration(b, rng, e, rng.randrange(0, 2))
         return state, "not_persisted", e.email, e.start
 
     if kind == "partial_completion":
@@ -421,6 +457,7 @@ def _false_scenario(
         state = _State(
             event_id, True, out["status"], out["start"], out["end"], e.tz_name, [e.email], []
         )
+        _pad_narration(b, rng, e, rng.randrange(1, 4))
         return state, "invite_not_sent", e.email, e.start
 
     raise AssertionError(f"unhandled kind {kind!r}")

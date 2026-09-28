@@ -6,15 +6,17 @@ import hashlib
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
 from typer.testing import CliRunner
 
 from agent_claimcheck import resources
 from agent_claimcheck.bench.generator import generate
-from agent_claimcheck.bench.generator.leakage import leakage_auroc
+from agent_claimcheck.bench.generator._blocked_words import BLOCKED_SYLLABLE_WORDS
+from agent_claimcheck.bench.generator.leakage import leakage_auroc, rank_auroc
 from agent_claimcheck.bench.generator.plan import DOMAINS, FALSE_KINDS, GENUINE_KINDS, full_plan
 from agent_claimcheck.bench.generator.pools import build_pools
-from agent_claimcheck.bench.generator.validate import validate_dataset
+from agent_claimcheck.bench.generator.validate import _domain_template_texts, validate_dataset
 from agent_claimcheck.claims import ClaimExtractor, success_claims
 from agent_claimcheck.cli import app
 from agent_claimcheck.redact import detector_view, resolve_claims
@@ -87,7 +89,7 @@ def test_probe_and_structured_fractions_per_cell() -> None:
             for kind, n in kinds:
                 cell = [s for s in specs if s.class_ == class_ and s.kind == kind]
                 assert len(cell) == n
-                expected_probe = n if kind == "not_persisted" else round(2 * n / 3)
+                expected_probe = round(n / 2) if kind == "not_persisted" else round(2 * n / 3)
                 assert sum(s.probe for s in cell) == expected_probe
                 assert sum(s.structured for s in cell) == round(0.8 * n)
 
@@ -183,6 +185,42 @@ def test_leakage_train_auroc_is_at_most_0_65(all_traces: list[Trace]) -> None:
     labels = [0 if t.ground_truth and t.ground_truth.outcome == "success" else 1 for t in train]
     auroc = leakage_auroc(texts, labels)
     assert auroc <= 0.65, auroc
+
+
+def test_step_count_does_not_strongly_predict_the_label(all_traces: list[Trace]) -> None:
+    """Regression guard: a trace's raw step count must not, on its own,
+    nearly determine the label. Before short false scenarios were padded
+    with neutral narration, this was as high as 0.975 (booking).
+    """
+    train = [t for t in all_traces if t.meta and t.meta.get("split") == "train"]
+    scores = np.array([-len(t.steps) for t in train], dtype=float)
+    labels = np.array(
+        [0 if t.ground_truth and t.ground_truth.outcome == "success" else 1 for t in train]
+    )
+    assert rank_auroc(scores, labels) <= 0.65
+
+
+def test_syllable_entity_pools_avoid_real_dictionary_words() -> None:
+    """Names and company roots are built from syllables; none of them may
+    collide with a real, plausible dictionary word.
+    """
+    pools = build_pools(SEED)
+    for full_name in list(pools.names.train) + list(pools.names.test):
+        for part in full_name.split(" "):
+            assert part.lower() not in BLOCKED_SYLLABLE_WORDS, full_name
+    for company in list(pools.companies.train) + list(pools.companies.test):
+        root = company.rsplit(" ", 1)[0]
+        assert root.lower() not in BLOCKED_SYLLABLE_WORDS, company
+
+
+def test_train_test_templates_are_disjoint() -> None:
+    """`dataset validate`'s disjointness scan also covers instruction and
+    final-message templates, not just entity pools.
+    """
+    pools = build_pools(SEED)
+    for domain in DOMAINS:
+        train_templates, test_templates = _domain_template_texts(domain, pools)
+        assert set(train_templates).isdisjoint(test_templates)
 
 
 def test_dataset_validate_exits_0_on_the_committed_set() -> None:

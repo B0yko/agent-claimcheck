@@ -6,22 +6,48 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 
+import numpy as np
+
 from agent_claimcheck import resources
-from agent_claimcheck.bench.generator.leakage import leakage_auroc
+from agent_claimcheck.bench.generator.leakage import leakage_auroc, rank_auroc
 from agent_claimcheck.bench.generator.plan import DOMAINS, FALSE_KINDS, GENUINE_KINDS
-from agent_claimcheck.bench.generator.pools import build_pools
+from agent_claimcheck.bench.generator.pools import Pools, build_pools
 from agent_claimcheck.claims import ClaimExtractor, success_claims
 from agent_claimcheck.redact import detector_view, resolve_claims
 from agent_claimcheck.rules.engine import builtin_packs
 from agent_claimcheck.schema import Trace, iter_trace_lines
+
+_PLACEHOLDER = re.compile(r"\{[^{}]+\}")
+
+
+def _template_fragments(template: str) -> list[str]:
+    """The literal (non-`{field}`) spans of a template, long enough to be a
+    reliable fingerprint. A rendered trace that used this exact template
+    contains every one of these spans verbatim, even though the placeholders
+    themselves are filled in.
+    """
+    return [frag for frag in _PLACEHOLDER.split(template) if len(frag.strip(" '(),.:;")) >= 4]
+
+
+def _domain_template_texts(domain: str, pools: Pools) -> tuple[list[str], list[str]]:
+    """Every instruction and final-message template text for one domain,
+    split into (train-only, test-only).
+    """
+    templates = {"booking": pools.booking, "crm": pools.crm, "coding": pools.coding}[domain]
+    train = list(templates.instructions.train) + [m.text for m in templates.final_messages.train]
+    test = list(templates.instructions.test) + [m.text for m in templates.final_messages.test]
+    return train, test
+
 
 _DESIGN_TOTALS: dict[tuple[str, str], int] = {("genuine", kind): n for kind, n in GENUINE_KINDS} | {
     ("false", kind): n for kind, n in FALSE_KINDS
 }
 
 _LEAKAGE_THRESHOLD = 0.65
+_STEP_COUNT_LEAKAGE_THRESHOLD = 0.65
 
 
 def _resolve_paths(dir_path: str | Path | None) -> tuple[Path, Path, Path]:
@@ -217,6 +243,24 @@ def validate_dataset(dir_path: str | Path | None = None) -> list[str]:
                             f"{t.trace_id}: train trace contains a test-only entity {entity!r}"
                         )
 
+            train_templates, test_templates = _domain_template_texts(domain, pools)
+            train_only_fragments = [_template_fragments(tpl) for tpl in train_templates]
+            test_only_fragments = [_template_fragments(tpl) for tpl in test_templates]
+            for t in test_traces:
+                if t.task.domain != domain:
+                    continue
+                blob = json.dumps(t.model_dump(mode="json"))
+                for fragments in train_only_fragments:
+                    if fragments and all(frag in blob for frag in fragments):
+                        failures.append(f"{t.trace_id}: test trace matches a train-only template")
+            for t in train_traces:
+                if t.task.domain != domain:
+                    continue
+                blob = json.dumps(t.model_dump(mode="json"))
+                for fragments in test_only_fragments:
+                    if fragments and all(frag in blob for frag in fragments):
+                        failures.append(f"{t.trace_id}: train trace matches a test-only template")
+
     train_texts = [t.final_claim.text or "" for t in train_traces]
     train_labels = [
         0 if t.ground_truth is not None and t.ground_truth.outcome == "success" else 1
@@ -225,5 +269,17 @@ def validate_dataset(dir_path: str | Path | None = None) -> list[str]:
     auroc = leakage_auroc(train_texts, train_labels)
     if auroc > _LEAKAGE_THRESHOLD:
         failures.append(f"leakage audit: train AUROC {auroc:.3f} exceeds {_LEAKAGE_THRESHOLD}")
+
+    # A trace's raw step count must not, on its own, predict the label either
+    # (it very nearly did before short false scenarios were padded: see the
+    # generator's neutral re-check padding). Same rank-AUROC convention and
+    # positive class (failure) as the text leakage audit above, train only.
+    step_scores = np.array([-len(t.steps) for t in train_traces], dtype=float)
+    step_auroc = rank_auroc(step_scores, np.array(train_labels))
+    if step_auroc > _STEP_COUNT_LEAKAGE_THRESHOLD:
+        failures.append(
+            f"step-count leakage audit: train AUROC {step_auroc:.3f} "
+            f"exceeds {_STEP_COUNT_LEAKAGE_THRESHOLD}"
+        )
 
     return failures

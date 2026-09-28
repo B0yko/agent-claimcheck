@@ -2,7 +2,8 @@
   "counts": {
     "test/booking/false/error_ignored/receipt_only": 1,
     "test/booking/false/error_ignored/state_probe": 1,
-    "test/booking/false/not_persisted/state_probe": 3,
+    "test/booking/false/not_persisted/receipt_only": 1,
+    "test/booking/false/not_persisted/state_probe": 2,
     "test/booking/false/partial_completion/receipt_only": 1,
     "test/booking/false/partial_completion/state_probe": 1,
     "test/booking/false/phantom_action/state_probe": 2,
@@ -19,7 +20,8 @@
     "test/booking/genuine/recovered/receipt_only": 5,
     "test/booking/genuine/recovered/state_probe": 3,
     "test/coding/false/error_ignored/state_probe": 3,
-    "test/coding/false/not_persisted/state_probe": 2,
+    "test/coding/false/not_persisted/receipt_only": 1,
+    "test/coding/false/not_persisted/state_probe": 1,
     "test/coding/false/partial_completion/receipt_only": 1,
     "test/coding/false/partial_completion/state_probe": 1,
     "test/coding/false/phantom_action/receipt_only": 1,
@@ -34,7 +36,7 @@
     "test/coding/genuine/recovered/receipt_only": 2,
     "test/coding/genuine/recovered/state_probe": 6,
     "test/crm/false/error_ignored/state_probe": 2,
-    "test/crm/false/not_persisted/state_probe": 2,
+    "test/crm/false/not_persisted/receipt_only": 2,
     "test/crm/false/partial_completion/receipt_only": 1,
     "test/crm/false/partial_completion/state_probe": 2,
     "test/crm/false/phantom_action/receipt_only": 2,
@@ -51,7 +53,8 @@
     "test/crm/genuine/recovered/state_probe": 2,
     "train/booking/false/error_ignored/receipt_only": 1,
     "train/booking/false/error_ignored/state_probe": 3,
-    "train/booking/false/not_persisted/state_probe": 3,
+    "train/booking/false/not_persisted/receipt_only": 2,
+    "train/booking/false/not_persisted/state_probe": 1,
     "train/booking/false/partial_completion/receipt_only": 1,
     "train/booking/false/partial_completion/state_probe": 3,
     "train/booking/false/phantom_action/receipt_only": 2,
@@ -69,7 +72,8 @@
     "train/booking/genuine/recovered/state_probe": 10,
     "train/coding/false/error_ignored/receipt_only": 2,
     "train/coding/false/error_ignored/state_probe": 1,
-    "train/coding/false/not_persisted/state_probe": 4,
+    "train/coding/false/not_persisted/receipt_only": 2,
+    "train/coding/false/not_persisted/state_probe": 2,
     "train/coding/false/partial_completion/receipt_only": 1,
     "train/coding/false/partial_completion/state_probe": 3,
     "train/coding/false/phantom_action/receipt_only": 1,
@@ -88,7 +92,8 @@
     "train/coding/genuine/recovered/state_probe": 7,
     "train/crm/false/error_ignored/receipt_only": 2,
     "train/crm/false/error_ignored/state_probe": 2,
-    "train/crm/false/not_persisted/state_probe": 4,
+    "train/crm/false/not_persisted/receipt_only": 1,
+    "train/crm/false/not_persisted/state_probe": 3,
     "train/crm/false/partial_completion/receipt_only": 1,
     "train/crm/false/partial_completion/state_probe": 2,
     "train/crm/false/phantom_action/state_probe": 3,
@@ -108,7 +113,7 @@
   "generator": "claimcheck-bench/1",
   "seed": 20260924,
   "sha256": {
-    "traces.test.jsonl": "dc97c8999bdbbbe5be9b6d616ab7c281dfa300ca4a409598b2c87f46a00413fd",
-    "traces.train.jsonl": "fb4db71b7787bc53f8b91509ffe732552d9f7989ae81c67547d07601ddbbb04d"
+    "traces.test.jsonl": "5300042deee17d44c41112f11669a4d0a9341be6877ab98e6767789f4d97192a",
+    "traces.train.jsonl": "69b9d510bb8416e77da8b81c54cd3bed52ce6a93e6368a3c7b7cff0e9cfdbb73"
   }
 }
