@@ -7,9 +7,11 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from factory import probe, tool_call, tool_result, trace
+from factory import message, probe, tool_call, tool_result, trace
+from sklearn.model_selection import StratifiedKFold
 
 from agent_claimcheck.claims import ClaimExtractor, success_claims
+from agent_claimcheck.detectors import classifier as classifier_module
 from agent_claimcheck.detectors.classifier import (
     ClassifierDetector,
     load_artifact,
@@ -194,6 +196,36 @@ def test_oof_predictions_are_deterministic() -> None:
     first = oof_predictions(views, labels, seed=0)
     second = oof_predictions(views, labels, seed=0)
     assert first == second
+
+
+def test_oof_predictions_standardise_within_each_fold_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """OOF predictions must be really out-of-fold. A fold's
+    standardisation statistics (mean/scale) must come from that fold's
+    training rows only; a held-out row's own feature values must not move
+    ANY other held-out row's OOF prediction. Fixing the C grid to one value
+    isolates this from the (legitimate, dataset-wide) effect a row's
+    features have on C selection.
+    """
+    monkeypatch.setattr(classifier_module, "C_GRID", (1.0,))
+
+    views, labels, _domains = _views_labels_domains(n=15)
+    y = np.array(labels)
+    x = classifier_module._feature_matrix(views)
+    splitter = StratifiedKFold(n_splits=5, shuffle=True, random_state=0)
+    _, test_idx = next(fold for fold in splitter.split(x, y) if len(fold[1]) >= 2)
+    i, j = int(test_idx[0]), int(test_idx[1])
+
+    baseline = oof_predictions(views, labels, seed=0)
+
+    last_i = max(s.i for s in views[i].steps)
+    filler = [message(last_i + 1 + k, "agent", "filler") for k in range(50)]
+    perturbed_views = list(views)
+    perturbed_views[i] = views[i].model_copy(update={"steps": [*views[i].steps, *filler]})
+
+    after = oof_predictions(perturbed_views, labels, seed=0)
+    assert after[j] == pytest.approx(baseline[j], abs=1e-9)
 
 
 def test_load_artifact_defaults_to_the_packaged_model() -> None:

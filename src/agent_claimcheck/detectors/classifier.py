@@ -57,18 +57,26 @@ def _positive_proba(model: LogisticRegression, x: np.ndarray) -> np.ndarray:
     return result
 
 
-def _select_c(x_std: np.ndarray, y: np.ndarray, seed: int) -> tuple[float, list[float]]:
+def _select_c(x: np.ndarray, y: np.ndarray, seed: int) -> tuple[float, list[float]]:
     """The C in `C_GRID` with the lowest 5-fold mean log-loss; same folds for
     every C (a fresh `StratifiedKFold(..., random_state=seed)` reproduces
     identical splits every time it is asked to split the same `x`, `y`).
+
+    `x` is the RAW (unstandardised) feature matrix: each fold standardises
+    on its own training rows only (`_standardise(x[train_idx])`) and applies
+    those fold-specific mean/scale to the held-out rows, so no held-out
+    row's own value can shift the statistics its own fold is scored under
+    (so the predictions are really out-of-fold).
     """
     mean_loglosses: list[float] = []
     for c in C_GRID:
         splitter = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
         fold_losses: list[float] = []
-        for train_idx, test_idx in splitter.split(x_std, y):
-            model = _fit_one(x_std[train_idx], y[train_idx], c)
-            p1 = _positive_proba(model, x_std[test_idx])
+        for train_idx, test_idx in splitter.split(x, y):
+            x_train_std, means, scales = _standardise(x[train_idx])
+            x_test_std = (x[test_idx] - means) / scales
+            model = _fit_one(x_train_std, y[train_idx], c)
+            p1 = _positive_proba(model, x_test_std)
             fold_losses.append(float(log_loss(y[test_idx], p1, labels=[0, 1])))
         mean_loglosses.append(float(np.mean(fold_losses)))
     best_idx = int(np.argmin(mean_loglosses))
@@ -88,8 +96,8 @@ def train_lr(
     """
     x = _feature_matrix(views)
     y = np.array(labels, dtype=int)
+    best_c, cv_logloss = _select_c(x, y, seed)
     x_std, means, scales = _standardise(x)
-    best_c, cv_logloss = _select_c(x_std, y, seed)
     model = _fit_one(x_std, y, best_c)
     return {
         "format": "claimcheck-lr/v1",
@@ -120,13 +128,14 @@ def oof_predictions(
     """
     x = _feature_matrix(views)
     y = np.array(labels, dtype=int)
-    x_std, _means, _scales = _standardise(x)
-    best_c, _cv_logloss = _select_c(x_std, y, seed)
+    best_c, _cv_logloss = _select_c(x, y, seed)
     splitter = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
     oof = np.zeros(len(views))
-    for train_idx, test_idx in splitter.split(x_std, y):
-        model = _fit_one(x_std[train_idx], y[train_idx], best_c)
-        oof[test_idx] = _positive_proba(model, x_std[test_idx])
+    for train_idx, test_idx in splitter.split(x, y):
+        x_train_std, means, scales = _standardise(x[train_idx])
+        x_test_std = (x[test_idx] - means) / scales
+        model = _fit_one(x_train_std, y[train_idx], best_c)
+        oof[test_idx] = _positive_proba(model, x_test_std)
     return oof.tolist()
 
 

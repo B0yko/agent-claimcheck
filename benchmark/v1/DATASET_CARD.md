@@ -142,11 +142,11 @@ the classifier combines them.
 | `n_tool_results` | 0.471 |
 | `last_result_succeeded` | 0.479 |
 | `probe_present` | 0.481 |
-| `reviewer_phrase_present` | 0.519 |
 | `unsupported_value_ratio` | 0.487 |
 | `n_state_probes` | 0.491 |
 | `claims_extracted_from_text` | 0.498 |
 | `n_claims` | 0.501 |
+| `reviewer_phrase_present` | 0.500 |
 
 ## Intended and unintended uses
 

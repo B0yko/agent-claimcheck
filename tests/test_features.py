@@ -6,7 +6,8 @@ from pathlib import Path
 
 from factory import message, probe, tool_call, tool_result, trace
 
-from agent_claimcheck.features import FEATURES, extract
+from agent_claimcheck.bench.generator.pools import _REVIEWER_PHRASES as _GENERATOR_PHRASES
+from agent_claimcheck.features import _REVIEWER_PHRASES, FEATURES, extract
 from agent_claimcheck.redact import detector_view
 
 DOCS_PATH = Path(__file__).resolve().parents[1] / "docs" / "detectors.md"
@@ -17,6 +18,21 @@ def test_every_feature_is_documented() -> None:
     assert "## Classifier" in text
     for spec in FEATURES:
         assert f"`{spec.name}`" in text, f"{spec.name} is not documented in docs/detectors.md"
+
+
+def test_reviewer_phrase_list_shares_no_substring_with_the_generator_pool() -> None:
+    """the feature's phrase list must be generic,
+    not copied from `bench/generator/pools.py`'s own injected-phrase pool.
+    A feature phrase that is a substring of one of the generator's actual
+    template sentences is exactly the kind of copying that turns this
+    feature into a lookup table for the benchmark's own templates.
+    """
+    generator_sentences = [p.lower() for p in _GENERATOR_PHRASES]
+    for phrase in _REVIEWER_PHRASES:
+        for sentence in generator_sentences:
+            assert phrase.lower() not in sentence, (
+                f"{phrase!r} is a substring of generator phrase {sentence!r}"
+            )
 
 
 def test_extract_is_deterministic() -> None:
@@ -145,7 +161,11 @@ def test_error_keyword_and_pending_status() -> None:
 
 def test_reviewer_phrase_and_hedge_words() -> None:
     injected = trace(
-        "t10", "coding", [], text="All done. QA note: verified complete.", claims=[("done", {})]
+        "t10",
+        "coding",
+        [],
+        text="All done. Internal note: task closed.",
+        claims=[("done", {})],
     )
     hedged = trace("t11", "coding", [], text="I think the fix is committed.", claims=[("done", {})])
     plain = trace("t12", "coding", [], text="Committed the fix.", claims=[("done", {})])
