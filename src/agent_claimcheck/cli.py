@@ -229,6 +229,9 @@ def check(
     max_usd: float | None = typer.Option(
         None, "--max-usd", help="Live judge budget cap in USD for this run."
     ),
+    no_cache: bool = typer.Option(
+        False, "--no-cache", help="Neither read nor write the judge response cache."
+    ),
 ) -> None:
     """Check success claims against trace evidence and gate each trace."""
     from agent_claimcheck.checker import Checker, dump_result
@@ -264,6 +267,7 @@ def check(
             prompt=prompt,
             calibration=calibration,
             max_usd=max_usd,
+            use_cache=not no_cache,
         )
     except (OSError, ValueError, RulePackError, PromptError, ResourceNotFoundError) as exc:
         error_console.print(f"error: {exc}")

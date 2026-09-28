@@ -330,6 +330,7 @@ def test_check_detector_judge_against_local_fake_server(
                 "jsonl",
                 "--fail-on",
                 "unverifiable",
+                "--no-cache",  # both traces render the same request
             ],
         )
         assert result.exit_code == 0, result.output
@@ -420,6 +421,9 @@ def test_check_detector_judge_budget_exhaustion(
                 str(max_usd),
                 "--fail-on",
                 "unverifiable",
+                # The three traces render identical requests; without this a
+                # later trace could be served from the first one's cache entry.
+                "--no-cache",
             ],
         )
         rows = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
@@ -431,5 +435,61 @@ def test_check_detector_judge_budget_exhaustion(
         assert all(r["abstain_reason"] == "budget_exhausted" for r in exhausted)
         assert call_count["n"] == 1  # the other two never reached the server
         assert result.exit_code == 1  # --fail-on unverifiable
+    finally:
+        server.shutdown()
+
+
+def test_check_judge_reuses_the_cache_unless_no_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = {"n": 0}
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            calls["n"] += 1
+            payload = json.dumps(
+                {
+                    "choices": [{"message": {"content": _VALID_CONTENT}}],
+                    "usage": {"prompt_tokens": 10, "completion_tokens": 5, "cost": 0.0001},
+                }
+            ).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
+            pass
+
+    server, port = _fake_server(Handler)
+    try:
+        traces_path = tmp_path / "traces.jsonl"
+        _write_labelled_traces(traces_path, 1)
+        config_path = tmp_path / "claimcheck.toml"
+        config_path.write_text(
+            "[judge]\n"
+            f'base_url = "http://127.0.0.1:{port}/v1"\n'
+            'model = "test/fake-model"\n'
+            "price_in_per_m = 1.0\n"
+            "price_out_per_m = 1.0\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("CLAIMCHECK_API_KEY", "test-key")
+        monkeypatch.setenv("CLAIMCHECK_LEDGER", str(tmp_path / "ledger.jsonl"))
+        args = ["check", str(traces_path), "--detector", "judge", "--config", str(config_path)]
+        args += ["--format", "jsonl"]
+
+        first = json.loads(runner.invoke(app, args).stdout.splitlines()[0])
+        second = json.loads(runner.invoke(app, args).stdout.splitlines()[0])
+        assert calls["n"] == 1
+        assert first["cached"] is False
+        assert second["cached"] is True
+        assert second["cost_usd"] == 0.0
+
+        third = json.loads(runner.invoke(app, [*args, "--no-cache"]).stdout.splitlines()[0])
+        assert calls["n"] == 2
+        assert third["cached"] is False
     finally:
         server.shutdown()

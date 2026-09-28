@@ -130,8 +130,10 @@ class Checker:
         thresholds: Thresholds | None = None,
         max_usd: float | None = None,
         concurrency: int | None = None,
+        use_cache: bool = True,
     ) -> None:
         self.config = config or Config()
+        self.use_cache = use_cache
         self.thresholds = thresholds or Thresholds(
             verified=self.config.gate.verified, false_success=self.config.gate.false_success
         )
@@ -215,7 +217,7 @@ class Checker:
             max_tokens=jc.max_tokens,
             json_mode=jc.json_mode,
             timeout_s=jc.timeout_s,
-            cache=JudgeCache(_cache_dir()),
+            cache=JudgeCache(_cache_dir()) if self.use_cache else None,
             budget=budget,
             price_book=price_book,
             ledger=ledger,
