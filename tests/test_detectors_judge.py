@@ -115,6 +115,10 @@ def test_parse_error_abstains_but_still_records_cost() -> None:
     assert output.abstain_reason == "parse_error"
     assert output.cost_usd == pytest.approx(0.0005)
     assert output.p_success == 0.6  # base rate
+    assert output.details["raw_response"] == "not valid json"
+    assert output.details["usage"]["cost"] == 0.0005
+    assert output.details["parsed"] is None
+    assert len(output.details["request_sha256"]) == 64
 
 
 def test_client_error_code_abstains_with_that_reason() -> None:

@@ -233,11 +233,29 @@ class JudgeDetector:
         valid_steps: set[int],
         body: dict[str, Any],
     ) -> DetectorOutput:
+        record: dict[str, Any] = {
+            "raw_response": content,
+            "usage": usage,
+            "cost_usd": actual,
+            "latency_ms": latency_ms,
+            "cached": cached,
+            "prompt_name": self._prompt.name,
+            "prompt_version": self._prompt.version,
+            "prompt_sha256": self._prompt.sha256,
+            "request_sha256": request_sha256(body),
+            "attempts": attempts,
+        }
         try:
             parsed = parse_judgment(content, valid_steps=valid_steps)
         except ParseError:
+            # Keep the raw answer and usage: a paid call that could not be
+            # parsed is exactly the record someone will want to inspect.
             return self._abstain(
-                "parse_error", cost_usd=actual, latency_ms=latency_ms, cached=cached
+                "parse_error",
+                cost_usd=actual,
+                latency_ms=latency_ms,
+                cached=cached,
+                details={**record, "parsed": None, "invalid_citation": False},
             )
 
         reason_step = parsed.evidence_steps[0] if parsed.evidence_steps else None
@@ -258,17 +276,8 @@ class JudgeDetector:
                 "rationale_truncated": parsed.rationale_truncated,
                 "claims": parsed.claims,
             },
-            "raw_response": content,
-            "usage": usage,
-            "cost_usd": actual,
-            "latency_ms": latency_ms,
-            "cached": cached,
-            "prompt_name": self._prompt.name,
-            "prompt_version": self._prompt.version,
-            "prompt_sha256": self._prompt.sha256,
-            "request_sha256": request_sha256(body),
+            **record,
             "invalid_citation": parsed.invalid_citation,
-            "attempts": attempts,
         }
         return DetectorOutput(
             detector=self.name,
@@ -282,7 +291,13 @@ class JudgeDetector:
         )
 
     def _abstain(
-        self, reason: str, *, cost_usd: float = 0.0, latency_ms: float = 0.0, cached: bool = False
+        self,
+        reason: str,
+        *,
+        cost_usd: float = 0.0,
+        latency_ms: float = 0.0,
+        cached: bool = False,
+        details: dict[str, Any] | None = None,
     ) -> DetectorOutput:
         return DetectorOutput(
             detector=self.name,
@@ -293,6 +308,7 @@ class JudgeDetector:
             cost_usd=cost_usd,
             latency_ms=latency_ms,
             cached=cached,
+            details=details or {},
         )
 
     def _append_ledger(
