@@ -34,7 +34,7 @@ Recorded run: `agent-claimcheck bench --live --judges deepseek/deepseek-v4-flash
 | judge:deepseek/deepseek-v4-flash | 41.7% | 90.0% | 0/48 | 5/48 | 0/72 | 70 | $0.059 | 345 | 2157 | 3079 |
 | judge:mistralai/mistral-small-3.2-24b-instruct | 52.5% | 96.8% | 26/48 | 2/48 | 0/72 | 57 | $0.146 | 343 | 2606 | 3542 |
 | judge:qwen/qwen3-235b-a22b-2507 | 89.2% | 92.5% | 31/48 | 8/48 | 0/72 | 13 | $0.211 | 404 | 3101 | 5804 |
-| cascade | 96.7% | 94.0% | 40/48 | 7/48 | 0/72 | 4 | $0.065 | 935 | 0.11 | 3580 |
+| cascade | 96.7% | 94.0% | 40/48 | 7/48 | 0/72 | 4 | $0.065 | 121 | 0.11 | 3580 |
 
 ### Recall by false-success kind (caught/total)
 
@@ -84,11 +84,12 @@ Model: `mistralai/mistral-small-3.2-24b-instruct`.
 
 ### Parse-error and abstention rates, and the share sent to the judge
 
-| judge | parse-error rate | abstain rate |
-|---|---|---|
-| judge:deepseek/deepseek-v4-flash | 0.0% | 0.0% |
-| judge:mistralai/mistral-small-3.2-24b-instruct | 0.0% | 0.0% |
-| judge:qwen/qwen3-235b-a22b-2507 | 0.0% | 0.0% |
+| judge | parse-error rate (test) | abstain rate (test) | parse errors (all calls) | abstentions (all calls) |
+|---|---|---|---|---|
+| judge:deepseek/deepseek-v4-flash | 0.0% | 0.0% | 0/300 | 0/300 |
+| judge:mistralai/mistral-small-3.2-24b-instruct | 0.0% | 0.0% | 0/300 | 0/300 |
+| judge:mistralai/mistral-small-3.2-24b-instruct:claim-by-claim | 0.0% | 0.0% | 0/300 | 0/300 |
+| judge:qwen/qwen3-235b-a22b-2507 | 0.0% | 0.0% | 2/300 | 2/300 |
 cascade share sent to the judge: 30.0%.
 
 ### Confusion matrices

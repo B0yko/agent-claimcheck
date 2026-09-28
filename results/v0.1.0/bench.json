@@ -108,7 +108,7 @@
       "p50_ms": 0.11224998161196709,
       "p95_ms": 3580.0474417221258,
       "usd_per_1k": 0.06514458333333334,
-      "wall_s_per_1k": 934.6735940858101
+      "wall_s_per_1k": 121.22265485212363
     },
     "cascade-offline": {
       "auroc": {
@@ -665,15 +665,31 @@
   "parse_error_rates": {
     "judge:deepseek/deepseek-v4-flash": {
       "abstain_rate": 0.0,
-      "parse_error_rate": 0.0
+      "abstained_all": 0,
+      "calls_all": 300,
+      "parse_error_rate": 0.0,
+      "parse_errors_all": 0
     },
     "judge:mistralai/mistral-small-3.2-24b-instruct": {
       "abstain_rate": 0.0,
-      "parse_error_rate": 0.0
+      "abstained_all": 0,
+      "calls_all": 300,
+      "parse_error_rate": 0.0,
+      "parse_errors_all": 0
+    },
+    "judge:mistralai/mistral-small-3.2-24b-instruct:claim-by-claim": {
+      "abstain_rate": 0.0,
+      "abstained_all": 0,
+      "calls_all": 300,
+      "parse_error_rate": 0.0,
+      "parse_errors_all": 0
     },
     "judge:qwen/qwen3-235b-a22b-2507": {
       "abstain_rate": 0.0,
-      "parse_error_rate": 0.0
+      "abstained_all": 2,
+      "calls_all": 300,
+      "parse_error_rate": 0.0,
+      "parse_errors_all": 2
     }
   },
   "recall_by_kind": {
