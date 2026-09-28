@@ -6,7 +6,7 @@ from agent_claimcheck.detectors.base import Detector, DetectorOutput, register_d
 from agent_claimcheck.rules.engine import RulePack, load_rule_pack
 from agent_claimcheck.schema import load_traces
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 __all__ = [
     "CheckResult",

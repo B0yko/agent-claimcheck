@@ -20,25 +20,25 @@ You need [uv](https://docs.astral.sh/uv/). Nothing below calls a paid API.
 Check the bundled examples (12 hand-written traces: one `verified`, one `false_success`, one `unverifiable` and one `skipped` per domain). The command exits 1 because it found false successes, which is what makes it usable as a CI gate:
 
 ```bash
-uvx --from git+https://github.com/B0yko/agent-claimcheck@v0.1.0 agent-claimcheck check example:mixed
+uvx --from git+https://github.com/B0yko/agent-claimcheck@v0.1.1 agent-claimcheck check example:mixed
 ```
 
 Reproduce every number in the Results section from the recorded run, offline:
 
 ```bash
-uvx --from git+https://github.com/B0yko/agent-claimcheck@v0.1.0 agent-claimcheck bench --from-recorded recorded:v0.1.0
+uvx --from git+https://github.com/B0yko/agent-claimcheck@v0.1.1 agent-claimcheck bench --from-recorded recorded:v0.1.0
 ```
 
 Open the review dashboard on the benchmark's test split, then visit http://127.0.0.1:8765:
 
 ```bash
-uvx --from git+https://github.com/B0yko/agent-claimcheck@v0.1.0 agent-claimcheck serve bench:test
+uvx --from git+https://github.com/B0yko/agent-claimcheck@v0.1.1 agent-claimcheck serve bench:test
 ```
 
-To keep the command around, install it as a tool:
+The package is also on PyPI, so `uvx agent-claimcheck check example:mixed` works too. To keep the command around, install it as a tool (or `pip install agent-claimcheck` into an environment):
 
 ```bash
-uv tool install git+https://github.com/B0yko/agent-claimcheck@v0.1.0
+uv tool install agent-claimcheck
 ```
 
 Exit codes: `0` when no result matches `--fail-on` (default `false_success`), `1` when one does, `2` on usage or validation errors.
@@ -159,7 +159,7 @@ agent-claimcheck check traces.jsonl --detector cascade --max-usd 0.50
 **As a CI gate.**
 
 ```yaml
-- run: uvx --from git+https://github.com/B0yko/agent-claimcheck@v0.1.0 agent-claimcheck check agent-runs.jsonl --fail-on false_success,unverifiable
+- run: uvx --from git+https://github.com/B0yko/agent-claimcheck@v0.1.1 agent-claimcheck check agent-runs.jsonl --fail-on false_success,unverifiable
 ```
 
 **From Python** ([`docs/python-api.md`](docs/python-api.md)):

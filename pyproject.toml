@@ -1,16 +1,29 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-fancy-pypi-readme"]
 build-backend = "hatchling.build"
 
 [project]
 name = "agent-claimcheck"
-version = "0.1.0"
+version = "0.1.1"
 description = "Check AI agent success claims against trace evidence instead of trusting the final message."
-license = { file = "LICENSE" }
+dynamic = ["readme"]
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [
     { name = "Andrii Boiko", email = "142843700+B0yko@users.noreply.github.com" },
 ]
 requires-python = ">=3.12"
+keywords = ["ai-agents", "agent-evaluation", "llm-evaluation", "llm-as-a-judge", "calibration", "evals"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Quality Assurance",
+    "Typing :: Typed",
+]
 dependencies = [
     "typer",
     "rich",
@@ -23,8 +36,30 @@ dependencies = [
     "tzdata",
 ]
 
+[project.urls]
+Homepage = "https://github.com/B0yko/agent-claimcheck"
+Repository = "https://github.com/B0yko/agent-claimcheck"
+Changelog = "https://github.com/B0yko/agent-claimcheck/blob/main/CHANGELOG.md"
+Issues = "https://github.com/B0yko/agent-claimcheck/issues"
+
 [project.scripts]
 agent-claimcheck = "agent_claimcheck.cli:main"
+
+# PyPI renders the README without the repository around it, so relative links
+# are rewritten to the tagged sources on GitHub (images to raw files).
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/markdown"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
+path = "README.md"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = '!\[([^\]]*)\]\((?!https?://)([^)]+)\)'
+replacement = '![\1](https://raw.githubusercontent.com/B0yko/agent-claimcheck/v0.1.1/\2)'
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = '\]\((?!https?://|#)([^)]+)\)'
+replacement = '](https://github.com/B0yko/agent-claimcheck/blob/v0.1.1/\1)'
 
 [dependency-groups]
 dev = [

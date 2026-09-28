@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.1] - 2026-09-28
+
+Packaging release: the code, benchmark and recorded results are unchanged from 0.1.0.
+
+### Added
+
+- Published on PyPI (`pip install agent-claimcheck`); the package metadata now carries the README, with relative links rewritten to the tagged sources on GitHub, project URLs, keywords and classifiers.
+
+### Changed
+
+- The licence is declared as the SPDX expression `Apache-2.0`.
+- CI and the publishing workflow use the current major versions of `actions/checkout`, `actions/setup-node` and `astral-sh/setup-uv`.
+
 ## [0.1.0] - 2026-09-28
 
 Initial release.
