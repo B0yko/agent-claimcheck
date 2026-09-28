@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import json
 import os
+import socket
+import threading
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -58,6 +60,20 @@ _STATIC_ALLOWLIST: dict[str, str] = {
 _MAX_BODY_BYTES = 8192
 _MAX_NOTE_CHARS = 1000
 _SSE_POLL_S = 0.05
+
+#: A page open in another tab can send unlimited blind GETs to this local
+#: server (Origin gating is POST-only, by design). Cap how many
+#: connections can be in flight at once so that can't spawn unbounded
+#: server threads; a connection past the cap is closed immediately rather
+#: than queued.
+_MAX_CONCURRENT_CONNECTIONS = 32
+
+#: Bounds how long a connection may sit idle mid-request (e.g. a request
+#: line that never arrives), so a worker thread -- and the connection slot
+#: above -- can't be held forever.
+_REQUEST_TIMEOUT_S = 30.0
+
+_ServerRequest = socket.socket | tuple[bytes, socket.socket]
 
 
 @dataclass
@@ -216,7 +232,13 @@ def _not_configured_score(trace_id: str) -> dict[str, Any]:
 
 
 class DashboardServer(ThreadingHTTPServer):
-    """A `ThreadingHTTPServer` carrying the dashboard's shared context."""
+    """A `ThreadingHTTPServer` carrying the dashboard's shared context.
+
+    Bounded: at most `_MAX_CONCURRENT_CONNECTIONS` requests are served at
+    once, so a same-machine page with an open tab can't spawn unbounded
+    server threads by firing blind GETs; a connection past the cap is
+    closed immediately rather than queued behind the rest.
+    """
 
     daemon_threads = True
 
@@ -228,6 +250,19 @@ class DashboardServer(ThreadingHTTPServer):
     ) -> None:
         super().__init__(address, handler_cls)
         self.ctx = ctx
+        self._connection_slots = threading.BoundedSemaphore(_MAX_CONCURRENT_CONNECTIONS)
+
+    def process_request(self, request: _ServerRequest, client_address: Any) -> None:
+        if not self._connection_slots.acquire(blocking=False):
+            self.close_request(request)
+            return
+        super().process_request(request, client_address)
+
+    def process_request_thread(self, request: _ServerRequest, client_address: Any) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._connection_slots.release()
 
 
 def create_server(
@@ -327,7 +362,14 @@ class Handler(BaseHTTPRequestHandler):
     connection, so a request rejected before its body is fully read (a
     missing/wrong Origin, the wrong Content-Type, an over-size body) never
     desynchronises a reused keep-alive connection.
+
+    `timeout` bounds how long a connection may sit idle mid-request (e.g. a
+    request line that never arrives): past it, `handle_one_request` gives
+    up and the connection closes, freeing its worker thread and connection
+    slot instead of holding both forever.
     """
+
+    timeout = _REQUEST_TIMEOUT_S
 
     def log_message(self, format_: str, *args: Any) -> None:  # noqa: A002 - stdlib signature
         pass
@@ -382,6 +424,14 @@ class Handler(BaseHTTPRequestHandler):
         content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip()
         if content_type != "application/json":
             self._send_json({"error": "unsupported_media_type"}, status=415)
+            return None
+
+        # A request carrying both `Content-Length` and `Transfer-Encoding`
+        # (or `Transfer-Encoding` alone) is framed ambiguously (RFC 7230,
+        # section 3.3.3): reject it rather than trusting `Content-Length`
+        # and silently ignoring the other header.
+        if self.headers.get("Transfer-Encoding") is not None:
+            self._send_json({"error": "unsupported_transfer_encoding"}, status=400)
             return None
 
         length_header = self.headers.get("Content-Length")

@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import json
 import re
+import socket
 import threading
+import time
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -22,6 +24,7 @@ from factory import message, trace
 
 from agent_claimcheck.config import Config, JudgeConfig
 from agent_claimcheck.detectors.judge import JudgeDetector
+from agent_claimcheck.server import app as server_app
 from agent_claimcheck.server.app import DashboardServer, create_server
 
 _STATIC_DIR = Path(__file__).resolve().parents[1] / "src" / "agent_claimcheck" / "server" / "static"
@@ -49,6 +52,23 @@ def _stop(server: DashboardServer, thread: threading.Thread) -> None:
     server.shutdown()
     server.server_close()
     thread.join(timeout=5)
+
+
+def _raw_request(server: DashboardServer, raw: bytes) -> bytes:
+    """Send exact bytes over a fresh socket; return everything read back."""
+    with socket.create_connection(("127.0.0.1", server.server_port), timeout=5) as sock:
+        sock.sendall(raw)
+        sock.settimeout(5)
+        chunks: list[bytes] = []
+        try:
+            while True:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+        except TimeoutError:
+            pass
+        return b"".join(chunks)
 
 
 @pytest.fixture
@@ -177,6 +197,82 @@ def test_post_requires_origin_content_type_and_a_bounded_body(
         "/api/judge/cancel", json={"run_id": "does-not-exist"}, headers={"Origin": str(origin)}
     )
     assert unknown_run.status_code == 404
+
+
+def test_post_rejects_a_body_framed_with_both_content_length_and_transfer_encoding(
+    dashboard: tuple[DashboardServer, httpx.Client],
+) -> None:
+    # RFC 7230, section 3.3.3: a request carrying both headers is
+    # ambiguously framed and must be rejected, not resolved by trusting
+    # one and silently dropping the other.
+    server, _client = dashboard
+    body = b'{"run_id":"abc"}'
+    request = (
+        b"POST /api/judge/cancel HTTP/1.1\r\n"
+        b"Host: 127.0.0.1:%d\r\n"
+        b"Origin: http://127.0.0.1:%d\r\n"
+        b"Content-Type: application/json\r\n"
+        b"Content-Length: %d\r\n"
+        b"Transfer-Encoding: chunked\r\n"
+        b"Connection: close\r\n"
+        b"\r\n%s"
+    ) % (server.server_port, server.server_port, len(body), body)
+
+    response = _raw_request(server, request)
+    status_line = response.split(b"\r\n", 1)[0]
+    assert b" 400 " in status_line, response
+
+
+def test_handler_has_a_bounded_idle_timeout() -> None:
+    # A connection that never finishes sending its request line must not
+    # be able to hold its worker thread (and connection slot) forever.
+    assert server_app.Handler.timeout is not None
+    assert 0 < server_app.Handler.timeout <= 60
+
+
+def test_server_bounds_concurrent_connections_and_recovers_once_they_clear(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A same-machine page can fire unlimited blind GETs (Origin gating is
+    # POST-only, by design), so the server must cap concurrent in-flight
+    # connections rather than spawning a thread per connection forever.
+    monkeypatch.setattr(server_app, "_MAX_CONCURRENT_CONNECTIONS", 2)
+    server = create_server([], port=0)
+    thread = _run(server)
+    stalled: list[socket.socket] = []
+    try:
+        # Two connections that never send a request line: each occupies a
+        # slot (and a worker thread) until it is closed or times out.
+        for _ in range(2):
+            stalled.append(socket.create_connection(("127.0.0.1", server.server_port), timeout=5))
+
+        # A third connection arrives while both slots are taken: it must
+        # be turned away immediately rather than queued behind them.
+        with socket.create_connection(("127.0.0.1", server.server_port), timeout=5) as extra:
+            extra.settimeout(5)
+            assert extra.recv(16) == b""
+
+        # Freeing the stalled connections must free their slots: the cap
+        # sheds load, it doesn't wedge the server for later traffic.
+        for sock_ in stalled:
+            sock_.close()
+        stalled.clear()
+
+        deadline = time.monotonic() + 2.0
+        response = None
+        while response is None and time.monotonic() < deadline:
+            try:
+                with httpx.Client(base_url=_origin(server), timeout=1, trust_env=False) as client:
+                    response = client.get(
+                        "/api/state", headers={"Host": f"127.0.0.1:{server.server_port}"}
+                    )
+            except httpx.TransportError:
+                time.sleep(0.05)
+        assert response is not None and response.status_code == 200
+    finally:
+        for sock_ in stalled:
+            sock_.close()
+        _stop(server, thread)
 
 
 # -- GET never starts paid work -----------------------------------------------
