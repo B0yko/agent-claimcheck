@@ -35,7 +35,12 @@ claims:
   (shipped as the built-in `done | completed | finished | all set` → `done`
   mapping) are tried only as a fallback, when every applicable domain
   pack's own patterns matched nothing — a `generic` pack has no `claims`
-  and is never consulted by the rules detector itself.
+  and is never consulted by the rules detector itself. A match is dropped
+  as a non-claim when its sentence has a negation before it (`couldn't`,
+  `unable to`, `didn't`, `never`, `no longer`, ...) or a passive one
+  (`wasn't`, `is not`, `hasn't been`, `did not get`, ...), and when the
+  sentence says `not yet` anywhere. A negation after the match does not
+  count: "Booked, and nothing is not working" still claims `booked`.
 - `claims`: `{claim_type: rule}`. Each rule has:
   - `action` (required): a glob a `tool_call` name must match.
   - `receipt` (required, may be empty): checks on that call's

@@ -38,6 +38,18 @@ _NEGATION_PHRASES: tuple[str, ...] = (
     "no longer",
 )
 
+#: Passive and copula negations ("wasn't booked", "has not been sent", "did
+#: not get created"). Matched on word boundaries, straight or curly
+#: apostrophe, so "this notebook" or "is nothing" never counts. Like the
+#: phrases above, they only drop a match that comes after them.
+_PASSIVE_NEGATION = re.compile(
+    r"\b(?:"
+    r"(?:was|is|were|are)(?:n['\u2019]t|\s+not)"
+    r"|(?:has|have)(?:n['\u2019]t|\s+not)\s+been"
+    r"|did(?:n['\u2019]t|\s+not)\s+get"
+    r")\b"
+)
+
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
 
 
@@ -78,7 +90,9 @@ def _is_negated(match: re.Match[str], text: str, sentences: Sequence[tuple[int, 
     if "not yet" in sentence:
         return True
     before = text[sent_start:pos].lower()
-    return any(phrase in before for phrase in _NEGATION_PHRASES if phrase != "not yet")
+    if any(phrase in before for phrase in _NEGATION_PHRASES if phrase != "not yet"):
+        return True
+    return _PASSIVE_NEGATION.search(before) is not None
 
 
 def _extract_with_packs(text: str, packs: Sequence[RulePack]) -> list[ResolvedClaim]:

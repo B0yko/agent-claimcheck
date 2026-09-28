@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from factory import message, tool_call, trace
 
 from agent_claimcheck.claims import ClaimExtractor, ResolvedClaim, success_claims
@@ -51,6 +52,53 @@ def test_negation_guard_drops_the_match() -> None:
             text, domain="booking", steps=[tool_call(0, "calendar.create_event")]
         )
         assert claims == [], text
+
+
+def _booking_claims(text: str) -> list[ResolvedClaim]:
+    return _extractor().extract(
+        text, domain="booking", steps=[tool_call(0, "calendar.create_event")]
+    )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "The meeting wasn't booked.",
+        "It was not booked.",
+        "It isn't booked yet.",
+        "The meeting is not booked.",
+        "Both meetings weren't booked.",
+        "The meetings were not booked.",
+        "The slots aren't booked.",
+        "The slots are not booked.",
+        "The meeting hasn't been booked.",
+        "The meeting has not been booked.",
+        "The meetings haven't been booked.",
+        "The meetings have not been booked.",
+        "The meeting didn't get booked.",
+        "The meeting did not get booked.",
+        "The meeting wasn\u2019t booked.",
+        "The slot was NOT booked.",
+        "Sorry, but the requested slot wasn't free, so nothing is booked.",
+    ],
+)
+def test_passive_and_copula_negation_before_the_match_drops_it(text: str) -> None:
+    assert _booking_claims(text) == [], text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Booked, and nothing is not working.",
+        "Booked the slot, and it wasn't easy.",
+        "Confirmed. It wasn't easy, but it is done.",
+        "The notebook slot is booked.",
+        "That was nothing special: booked.",
+        "Booked, and the old slot isn't needed any more.",
+    ],
+)
+def test_negation_after_the_match_or_in_another_word_keeps_the_claim(text: str) -> None:
+    assert [c.type for c in _booking_claims(text)] == ["booked"], text
 
 
 def test_not_yet_anywhere_in_the_sentence_drops_the_match() -> None:
