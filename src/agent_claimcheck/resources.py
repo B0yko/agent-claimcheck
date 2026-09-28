@@ -49,10 +49,10 @@ def _packaged_candidate(rel: str) -> Path | None:
 def path(rel_or_alias: str) -> Path:
     """Resolve a packaged relative path or alias (e.g. ``example:browser``).
 
-    Tries the packaged location under ``agent_claimcheck`` first, then the
-    repository root. Raises ``ResourceNotFoundError`` with a clear message
-    when a name is recognised but the underlying data does not exist yet
-   .
+     Tries the packaged location under ``agent_claimcheck`` first, then the
+     repository root. Raises ``ResourceNotFoundError`` with a clear message
+     when a name is recognised but the underlying data does not exist yet
+    .
     """
     rel = ALIASES.get(rel_or_alias, rel_or_alias)
 
