@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/B0yko/agent-claimcheck/blob/main/schemas/agent-trace-v1.json",
+  "title": "agent-trace/v1",
+  "type": "object",
+  "required": ["schema", "trace_id", "source", "task", "steps", "final_claim"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "agent-trace/v1" },
+    "trace_id": { "type": "string", "minLength": 1 },
+    "source": { "type": "string", "minLength": 1 },
+    "task": { "$ref": "#/$defs/task" },
+    "steps": { "type": "array", "items": { "$ref": "#/$defs/step" } },
+    "final_claim": { "$ref": "#/$defs/finalClaim" },
+    "ground_truth": {
+      "anyOf": [{ "$ref": "#/$defs/groundTruth" }, { "type": "null" }]
+    },
+    "meta": { "type": ["object", "null"] }
+  },
+  "$defs": {
+    "task": {
+      "type": "object",
+      "required": ["id", "domain", "instruction"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "domain": { "enum": ["booking", "crm", "coding", "browser", "other"] },
+        "instruction": { "type": "string" }
+      }
+    },
+    "step": {
+      "type": "object",
+      "required": ["i", "ts", "kind", "role"],
+      "additionalProperties": false,
+      "properties": {
+        "i": { "type": "integer", "minimum": 0 },
+        "ts": { "type": "string", "format": "date-time" },
+        "kind": { "enum": ["message", "tool_call", "tool_result", "state_probe"] },
+        "role": { "enum": ["user", "agent", "tool", "environment"] },
+        "name": { "type": ["string", "null"] },
+        "content": { "type": ["string", "null"] },
+        "args": { "type": ["object", "null"] },
+        "ok": { "type": ["boolean", "null"] },
+        "output": {},
+        "error": { "anyOf": [{ "type": "string" }, { "type": "object" }, { "type": "null" }] }
+      }
+    },
+    "finalClaim": {
+      "type": "object",
+      "required": ["text"],
+      "additionalProperties": false,
+      "properties": {
+        "text": { "type": ["string", "null"] },
+        "claims": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/claim" },
+          "default": []
+        }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string" },
+        "subject": { "type": "object" }
+      }
+    },
+    "groundTruth": {
+      "type": "object",
+      "required": ["outcome", "checked_by"],
+      "additionalProperties": false,
+      "properties": {
+        "outcome": { "enum": ["success", "failure", "unknown"] },
+        "checked_by": { "enum": ["state_probe", "human", "none"] },
+        "details": { "type": "object" }
+      }
+    }
+  }
+}
