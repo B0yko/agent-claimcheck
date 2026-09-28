@@ -1,0 +1,37 @@
+# agent-claimcheck configuration. Copy to claimcheck.toml (in the current
+# directory, or point --config at it) and uncomment/edit what you need.
+# Precedence for every setting: CLI flag > environment variable > this file
+# > built-in default. See docs/detectors.md and docs/rules.md for what each
+# section actually controls.
+
+[gate]
+verified = 0.80       # p_success at or above this is verdict "verified"
+false_success = 0.20  # p_success at or below this is verdict "false_success"; between is "unverifiable"
+
+[judge]
+base_url = "https://openrouter.ai/api/v1"  # OpenAI-compatible /chat/completions endpoint
+api_key_env = "CLAIMCHECK_API_KEY"         # env var read for the API key
+# model = "deepseek/deepseek-chat"  # judge model id; no default, required to run the judge or cascade detector
+# prompt = "claim-audit"            # built-in prompt name ("claim-audit" or "claim-by-claim") or a path to a custom prompt file; unset uses claim-audit
+temperature = 0.0     # sampling temperature for the judge call
+max_tokens = 400      # max completion tokens per judge call
+json_mode = true      # request response_format: {"type": "json_object"}
+timeout_s = 60.0      # HTTP timeout per judge call, in seconds
+concurrency = 8       # worker threads used to score traces concurrently
+# price_in_per_m = 0.14   # override price per million input tokens; unset resolves from OpenRouter's /models listing
+# price_out_per_m = 0.28  # override price per million output tokens; unset resolves from OpenRouter's /models listing
+
+[budget]
+max_usd = 1.0  # a live judge run stops cleanly before this cumulative cost is exceeded
+
+[rules]
+packs = []  # extra rule pack YAML paths, added on top of the built-in booking/crm/coding/generic packs
+non_success_types = ["failed", "blocked", "gave_up", "needs_input", "partial"]  # claim types never treated as a success assertion
+
+[classifier]
+# model = "models/lr-v1.json"          # path to a classifier artifact JSON; unset uses the shipped models/lr-v1.json
+# calibration = "models/calibrators-v1.json"  # path to a CalibratorSet JSON; unset uses the shipped calibrators
+
+# Not read from this file: CLAIMCHECK_LEDGER and CLAIMCHECK_LEDGER_CAP_USD
+# are environment variables only (see .env.example), so a ledger path or
+# lifetime spend cap is never accidentally committed alongside the repo.
