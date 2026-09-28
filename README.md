@@ -174,7 +174,7 @@ for r in checker.check(load_traces("traces.jsonl"), probes="probes.jsonl"):
 
 ## Works with any agent-trace/v1 producer
 
-agent-trace/v1 is a small shared format used by three projects: [booking-truth](https://github.com/B0yko/booking-truth) (a harness that grades booking agents by the end state of a sandbox calendar and CRM), proof-of-done (a coding-agent hook that accepts "tests pass" only with evidence in the transcript) and this one. Traces flow only through the format; no project imports another. Results are published as [`schemas/claimcheck-result-v1.json`](schemas/claimcheck-result-v1.json), human reviews are written back as agent-trace/v1, and the benchmark itself is agent-trace/v1, so other tools can use it as a labelled test set. [`docs/interop.md`](docs/interop.md) maps OpenTelemetry GenAI spans, Langfuse observations and LangSmith runs onto the format.
+agent-trace/v1 is a small shared format used by three projects: [booking-truth](https://github.com/B0yko/booking-truth) (a harness that grades booking agents by the end state of a sandbox calendar and CRM), [proof-of-done](https://github.com/B0yko/proof-of-done) (a coding-agent hook that blocks "tests pass", "build succeeds" or "deployed" unless the transcript shows the command ran after the last edit and succeeded) and this one. Traces flow only through the format; no project imports another. Results are published as [`schemas/claimcheck-result-v1.json`](schemas/claimcheck-result-v1.json), human reviews are written back as agent-trace/v1, and the benchmark itself is agent-trace/v1, so other tools can use it as a labelled test set. [`docs/interop.md`](docs/interop.md) maps OpenTelemetry GenAI spans, Langfuse observations and LangSmith runs onto the format.
 
 ## Configuration
 
