@@ -221,6 +221,99 @@ def test_calibration_flag_overrides_the_builtin_set(tmp_path: Path) -> None:
     assert booking_01["p_success"] == pytest.approx(0.27735193561025356)
 
 
+# ------------------------------------------------------- invalid input lines --
+
+
+def _mixed_validity_file(tmp_path: Path) -> Path:
+    valid = tmp_path / "valid.jsonl"
+    _write_labelled_traces(valid, 2)
+    good_lines = valid.read_text(encoding="utf-8").splitlines()
+    path = tmp_path / "mixed.jsonl"
+    path.write_text("\n".join([good_lines[0], "{not json", good_lines[1]]) + "\n", encoding="utf-8")
+    return path
+
+
+def test_invalid_lines_are_skipped_but_exit_2_after_the_valid_results(tmp_path: Path) -> None:
+    path = _mixed_validity_file(tmp_path)
+    result = runner.invoke(app, ["check", str(path), "--detector", "rules", "--format", "jsonl"])
+    assert result.exit_code == 2, result.output
+    rows = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
+    assert [r["trace_id"] for r in rows] == ["t0", "t1"]
+    assert "line 2:" in result.stderr
+    assert "1 invalid trace line(s) skipped" in result.stderr
+
+
+def test_invalid_lines_dominate_fail_on(tmp_path: Path) -> None:
+    path = _mixed_validity_file(tmp_path)
+    # Every verdict fails the run, yet a validation error is still exit 2, not 1.
+    result = runner.invoke(
+        app,
+        [
+            "check",
+            str(path),
+            "--detector",
+            "rules",
+            "--fail-on",
+            "verified,false_success,unverifiable,skipped",
+        ],
+    )
+    assert result.exit_code == 2, result.output
+
+
+def test_out_still_written_for_valid_lines_when_some_are_invalid(tmp_path: Path) -> None:
+    path = _mixed_validity_file(tmp_path)
+    out_path = tmp_path / "results.jsonl"
+    result = runner.invoke(app, ["check", str(path), "--detector", "rules", "--out", str(out_path)])
+    assert result.exit_code == 2
+    assert len(out_path.read_text(encoding="utf-8").strip().splitlines()) == 2
+
+
+def test_strict_aborts_on_the_first_invalid_line_without_results(tmp_path: Path) -> None:
+    path = _mixed_validity_file(tmp_path)
+    out_path = tmp_path / "results.jsonl"
+    result = runner.invoke(
+        app,
+        [
+            "check",
+            str(path),
+            "--detector",
+            "rules",
+            "--strict",
+            "--format",
+            "jsonl",
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 2, result.output
+    assert result.stdout.strip() == ""
+    assert "line 2:" in result.stderr
+    assert not out_path.exists()
+
+
+def test_strict_on_a_clean_file_behaves_like_the_default() -> None:
+    result = runner.invoke(app, ["check", "example:mixed", "--strict", "--format", "jsonl"])
+    assert result.exit_code == 1  # the false_success traces, as without --strict
+    assert len(result.stdout.splitlines()) == 12
+
+
+def test_an_empty_input_file_exits_2(tmp_path: Path) -> None:
+    path = tmp_path / "empty.jsonl"
+    path.write_text("", encoding="utf-8")
+    result = runner.invoke(app, ["check", str(path)])
+    assert result.exit_code == 2
+    assert "no valid traces" in result.stderr
+
+
+def test_an_input_with_only_invalid_lines_exits_2(tmp_path: Path) -> None:
+    path = tmp_path / "bad.jsonl"
+    path.write_text("{not json\n[]\n", encoding="utf-8")
+    result = runner.invoke(app, ["check", str(path), "--fail-on", "skipped"])
+    assert result.exit_code == 2
+    assert "no valid traces" in result.stderr
+    assert "line 1:" in result.stderr
+
+
 # --------------------------------------------------------------- live judge --
 
 _VALID_CONTENT = json.dumps(

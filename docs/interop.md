@@ -85,6 +85,18 @@ documents `CheckResult`'s fields; the two schemas' `$defs` are the
 authoritative shapes for a downstream consumer that wants to parse results
 without importing this package.
 
+### Exit codes
+
+`agent-claimcheck check` exits `0` when no result has a verdict named by
+`--fail-on` (default `false_success`), and `1` when at least one does. It
+exits `2` for a usage or input error: an unknown `--detector`, `--format` or
+`--fail-on` value, an unreadable input, an input with no valid trace, or any
+line that failed `agent-trace/v1` validation. Without `--strict`, an invalid
+line is reported on stderr and skipped, the valid traces are still scored and
+printed (and written to `--out`), and only then does the run exit `2`, so a
+validation error always wins over `--fail-on`. With `--strict` the run stops
+on the first invalid line, before scoring anything.
+
 ## Human review as agent-trace/v1
 
 The local dashboard, `agent-claimcheck serve [INPUT ...] [--results F]

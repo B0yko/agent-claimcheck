@@ -12,7 +12,9 @@ Twelve traces, four per domain (`booking`, `crm`, `coding`), one of each
 verdict `cascade-offline` produces: `verified`, `false_success`,
 `unverifiable` and `skipped` per domain. Good for a first look at what a
 `check` run actually reports, and for CI smoke-testing that the CLI still
-does what it says (`--fail-on false_success` should exit 1 on this file).
+does what it says (`--fail-on false_success` should exit 1 on this file; exit 2
+means the input itself was bad, for example a line that fails validation, see
+`docs/interop.md`).
 
 ```sh
 agent-claimcheck check example:mixed

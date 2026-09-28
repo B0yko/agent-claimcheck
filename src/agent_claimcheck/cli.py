@@ -232,8 +232,17 @@ def check(
     no_cache: bool = typer.Option(
         False, "--no-cache", help="Neither read nor write the judge response cache."
     ),
+    strict: bool = typer.Option(
+        False, "--strict", help="Abort with exit 2 on the first invalid trace line."
+    ),
 ) -> None:
-    """Check success claims against trace evidence and gate each trace."""
+    """Check success claims against trace evidence and gate each trace.
+
+    Exit codes: 0 when nothing matched --fail-on; 1 when a verdict named by
+    --fail-on occurred; 2 on a usage or input error, including any trace line
+    that failed validation (unless --strict aborts earlier) and an input with
+    no valid trace. Exit 2 wins over exit 1.
+    """
     from agent_claimcheck.checker import Checker, dump_result
     from agent_claimcheck.config import load_config
     from agent_claimcheck.judge.render import PromptError
@@ -252,12 +261,20 @@ def check(
         raise typer.Exit(code=2)
 
     try:
-        report = load_traces_report(input_file)
+        report = load_traces_report(input_file, strict=strict)
+    except TraceValidationError as exc:
+        for err in exc.errors:
+            error_console.print(f"line {err.line_no}: {err.json_path}: {err.message}")
+        error_console.print("error: aborting on the first invalid line (--strict)")
+        raise typer.Exit(code=2) from None
     except (OSError, ResourceNotFoundError) as exc:
         error_console.print(f"error: {exc}")
         raise typer.Exit(code=2) from None
     for err in report.errors:
         error_console.print(f"line {err.line_no}: {err.json_path}: {err.message}")
+    if not report.traces:
+        error_console.print(f"error: no valid traces loaded from {input_file}")
+        raise typer.Exit(code=2)
 
     try:
         checker = Checker(
@@ -315,6 +332,12 @@ def check(
         lines = [dump_result(r) for r in results]
         Path(out).write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
 
+    if report.errors:
+        error_console.print(
+            f"error: {len(report.errors)} invalid trace line(s) skipped; "
+            "exiting 2 (pass --strict to abort on the first one)"
+        )
+        raise typer.Exit(code=2)
     raise typer.Exit(code=1 if fail_on_set & set(counts) else 0)
 
 
