@@ -591,8 +591,9 @@ def test_cheapest_judge_model_falls_back_to_list_price_without_max_price() -> No
 
 def test_fmt_readable_tiers() -> None:
     assert _fmt_readable(0.0) == "0"
-    assert _fmt_readable(0.128) == "0"  # sub-millisecond offline detector
-    assert _fmt_readable(0.999) == "0"
+    assert _fmt_readable(0.004) == "<0.01"
+    assert _fmt_readable(0.128) == "0.13"  # sub-millisecond offline detector
+    assert _fmt_readable(0.999) == "1.00"
     assert _fmt_readable(1.0) == "1.00"
     assert _fmt_readable(5.5) == "5.50"
     assert _fmt_readable(9.999) == "10.00"

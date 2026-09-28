@@ -764,13 +764,15 @@ def _fmt_money(x: float) -> str:
 
 
 def _fmt_readable(x: float) -> str:
-    """`0` below 1 (a sub-millisecond offline detector, or a negligible
-    wall-clock/cost rate), 2 decimals below 10 so a real but small number
-    stays legible, an integer at 10 and above so a judge's multi-hundred
-    figure does not carry two meaningless decimal digits.
+    """Two decimals below 10 (so a sub-millisecond offline latency or a small
+    rate stays visible, with `<0.01` for anything smaller and `0` for exactly
+    zero), an integer at 10 and above so a judge's multi-hundred figure does
+    not carry two meaningless decimal digits.
     """
-    if x < 1:
+    if x == 0:
         return "0"
+    if x < 0.01:
+        return "<0.01"
     if x < 10:
         return f"{x:.2f}"
     return f"{round(x)}"
