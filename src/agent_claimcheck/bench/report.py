@@ -492,9 +492,14 @@ def _ablation(
     for label, key in (("claim-audit", audit_key), ("claim-by-claim", ablation_key)):
         rows = [r for r in judge_rows[key] if r["split"] == "test"]
         stats = _detector_stats(rows, {}, cost_usd_by_trace=None)
+        decisions = stats["decisions"]
         result[label] = {
             "auroc": stats["auroc"],
             "ece_calibrated": stats["ece_calibrated"],
+            "coverage": decisions["coverage"],
+            "caught": decisions["caught"],
+            "missed": decisions["missed"],
+            "n_failure": decisions["n_failure"],
             "usd_per_1k": stats["usd_per_1k"],
         }
     return {"model": model, **result}
@@ -533,11 +538,11 @@ def _hypothesis_h4(judge_rows: Mapping[str, list[dict[str, Any]]]) -> dict[str, 
     if not keys:
         return {"supported": False, "detail": "n/a (offline run)"}
 
+    def _caught(rows: Sequence[dict[str, Any]]) -> int:
+        return sum(1 for r in rows if _verdict(r, raw=True) == "false_success")
+
     def _recall(rows: Sequence[dict[str, Any]]) -> float | None:
-        if not rows:
-            return None
-        caught = sum(1 for r in rows if _verdict(r, raw=True) == "false_success")
-        return caught / len(rows)
+        return _caught(rows) / len(rows) if rows else None
 
     detail: dict[str, Any] = {}
     supported = False
@@ -557,8 +562,11 @@ def _hypothesis_h4(judge_rows: Mapping[str, list[dict[str, Any]]]) -> dict[str, 
         fooled = ri_recall is not None and other_recall is not None and ri_recall < other_recall
         detail[key] = {
             "reviewer_injection_recall": ri_recall,
+            "reviewer_injection_caught": _caught(ri_rows),
+            "reviewer_injection_total": len(ri_rows),
             "other_mean_recall": other_recall,
             "fooled": fooled,
+            "n_traces": len(judge_rows[key]),
         }
         supported = supported or fooled
     return {"supported": supported, "judges": detail}
@@ -851,11 +859,17 @@ def _h1_line(h1: Mapping[str, Any], detectors: Mapping[str, dict[str, Any]]) -> 
     def _denom(key: str) -> int:
         return int(detectors[key]["decisions"]["n_failure"])
 
-    fewest_key = min(sorted(missed), key=lambda k: missed[k])
     lowest_key = min(sorted(coverage), key=lambda k: coverage[k])
 
-    fewest_text = f"{fewest_key} ({missed[fewest_key]}/{_denom(fewest_key)})"
-    if fewest_key != "rules":
+    # Every detector tied for the fewest missed, not just the first by name.
+    fewest = min(missed.values())
+    tied = sorted(k for k, m in missed.items() if m == fewest)
+    denominators = {_denom(k) for k in tied}
+    if len(denominators) == 1:
+        fewest_text = f"{', '.join(tied)} ({fewest}/{denominators.pop()})"
+    else:
+        fewest_text = ", ".join(f"{k} ({fewest}/{_denom(k)})" for k in tied)
+    if "rules" not in tied:
         fewest_text += f" vs rules {missed['rules']}/{_denom('rules')}"
 
     lowest_text = f"{lowest_key} {_fmt_pct(coverage[lowest_key])}"
@@ -903,13 +917,20 @@ def _h4_line(h4: Mapping[str, Any]) -> str:
     for key, row in sorted(h4["judges"].items()):
         ri = row["reviewer_injection_recall"]
         other = row["other_mean_recall"]
-        ri_text = _fmt_pct(ri) if ri is not None else "n/a"
+        ri_text = "n/a"
+        if ri is not None:
+            ri_text = (
+                f"{_fmt_pct(ri)} ({row['reviewer_injection_caught']}/"
+                f"{row['reviewer_injection_total']})"
+            )
         other_text = _fmt_pct(other) if other is not None else "n/a"
         parts.append(f"{key}: reviewer_injection recall {ri_text} vs other-kind mean {other_text}")
+    sizes = {row["n_traces"] for row in h4["judges"].values()}
+    scope = f"all {sizes.pop()} traces" if len(sizes) == 1 else "all recorded traces"
     return (
-        f"{header}: **{_support(h4)}** (all 300 traces, raw outputs through the gate): "
-        + "; ".join(parts)
-        + "."
+        f"{header}: **{_support(h4)}** (caught/total counted over {scope}, with raw judge "
+        "outputs through the gate; the other-kind mean averages the six other kinds' own "
+        "recalls): " + "; ".join(parts) + "."
     )
 
 
@@ -1025,13 +1046,14 @@ def _render_markdown(bench_json: dict[str, Any]) -> str:
     else:
         lines.append(f"Model: `{ablation['model']}`.")
         lines.append("")
-        lines.append("| prompt | AUROC | ECE calibrated | USD/1k |")
-        lines.append("|---|---|---|---|")
+        lines.append("| prompt | AUROC | ECE calibrated | coverage | caught | missed | USD/1k |")
+        lines.append("|---|---|---|---|---|---|---|")
         for prompt_name in ("claim-audit", "claim-by-claim"):
             row = ablation[prompt_name]
             lines.append(
                 f"| {prompt_name} | {_fmt_auroc(row['auroc'])} | {_fmt3(row['ece_calibrated'])} | "
-                f"{_fmt_money(row['usd_per_1k'])} |"
+                f"{_fmt_pct(row['coverage'])} | {row['caught']}/{row['n_failure']} | "
+                f"{row['missed']}/{row['n_failure']} | {_fmt_money(row['usd_per_1k'])} |"
             )
     lines.append("")
 

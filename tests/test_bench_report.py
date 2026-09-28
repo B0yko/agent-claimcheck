@@ -15,6 +15,7 @@ from agent_claimcheck.bench.report import (
     README_START,
     _cheapest_judge_model,
     _fmt_readable,
+    _h1_line,
     _hypothesis_h4,
     build_report,
     check_readme_diff,
@@ -508,6 +509,8 @@ def test_h4_uses_mean_recall_over_the_six_other_kinds_not_pooled() -> None:
     result = _hypothesis_h4({"judge:fake-model": rows})
     detail = result["judges"]["judge:fake-model"]
     assert detail["reviewer_injection_recall"] == pytest.approx(0.3)
+    assert (detail["reviewer_injection_caught"], detail["reviewer_injection_total"]) == (3, 10)
+    assert detail["n_traces"] == len(rows)
     assert detail["other_mean_recall"] == pytest.approx(0.5)
     assert detail["fooled"] is True
     assert result["supported"] is True
@@ -662,11 +665,14 @@ def test_h4_line_states_recall_percentages_per_judge(
     bench_json, bench_md = judge_report
     h4 = bench_json["hypotheses"]["h4"]
     line = next(line for line in bench_md.splitlines() if line.startswith("- H4"))
-    assert "all 300 traces" in line
+    assert "over all 300 traces" in line
+    assert "raw judge outputs" in line
     for key, row in h4["judges"].items():
         assert key in line
         if row["reviewer_injection_recall"] is not None:
-            assert f"{row['reviewer_injection_recall'] * 100:.1f}%" in line
+            caught, total = row["reviewer_injection_caught"], row["reviewer_injection_total"]
+            assert total > 0
+            assert f"{row['reviewer_injection_recall'] * 100:.1f}% ({caught}/{total})" in line
         if row["other_mean_recall"] is not None:
             assert f"{row['other_mean_recall'] * 100:.1f}%" in line
 
@@ -678,3 +684,87 @@ def test_leakage_constant_matches_the_dataset_card() -> None:
         encoding="utf-8"
     )
     assert f"{LEAKAGE_TEST_AUROC:.3f} AUROC** on test" in card
+
+
+# --- H1: every detector tied for the fewest missed ----------------------------
+
+
+def _h1_inputs(
+    missed: dict[str, int], n_failure: dict[str, int] | None = None
+) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    sizes = n_failure or {}
+    h1 = {
+        "supported": False,
+        "missed": missed,
+        "coverage": {k: 0.5 + i / 100 for i, k in enumerate(missed)},
+    }
+    detectors = {k: {"decisions": {"n_failure": sizes.get(k, 48)}} for k in missed}
+    return h1, detectors
+
+
+def test_h1_line_lists_every_detector_tied_for_the_fewest_missed() -> None:
+    h1, detectors = _h1_inputs(
+        {"rules": 4, "classifier-lr": 2, "judge:m/a": 2, "judge:m/b": 5, "cascade": 2}
+    )
+    line = _h1_line(h1, detectors)
+    assert "fewest missed = cascade, classifier-lr, judge:m/a (2/48) vs rules 4/48;" in line
+    assert "judge:m/b" not in line.split(";")[0]
+
+
+def test_h1_line_has_no_vs_clause_when_rules_is_among_the_tied() -> None:
+    h1, detectors = _h1_inputs({"rules": 2, "classifier-lr": 2, "judge:m/a": 3})
+    line = _h1_line(h1, detectors)
+    assert "fewest missed = classifier-lr, rules (2/48);" in line
+    assert " vs rules" not in line.split(";")[0]
+
+
+def test_h1_line_with_a_single_leader_reads_as_before() -> None:
+    h1, detectors = _h1_inputs({"rules": 4, "classifier-lr": 2})
+    assert "fewest missed = classifier-lr (2/48) vs rules 4/48;" in _h1_line(h1, detectors)
+
+
+def test_h1_line_gives_each_denominator_when_the_tied_differ() -> None:
+    h1, detectors = _h1_inputs(
+        {"rules": 4, "classifier-lr": 2, "judge:m/a": 2}, n_failure={"judge:m/a": 47}
+    )
+    line = _h1_line(h1, detectors)
+    assert "fewest missed = classifier-lr (2/48), judge:m/a (2/47) vs rules 4/48;" in line
+
+
+# --- prompt ablation: decisions next to the ranking metrics -------------------
+
+
+def test_ablation_reports_coverage_caught_and_missed(
+    judge_report: tuple[dict[str, Any], str],
+) -> None:
+    bench_json, bench_md = judge_report
+    ablation = bench_json["ablation"]
+    for prompt_name in ("claim-audit", "claim-by-claim"):
+        row = ablation[prompt_name]
+        assert row["n_failure"] == 48
+        assert 0 <= row["caught"] <= 48 and 0 <= row["missed"] <= 48
+        assert row["caught"] + row["missed"] <= 48
+        assert 0.0 <= row["coverage"] <= 1.0
+
+    section = bench_md.split("### Prompt ablation")[1].split("###")[0]
+    assert "| prompt | AUROC | ECE calibrated | coverage | caught | missed | USD/1k |" in section
+    for prompt_name in ("claim-audit", "claim-by-claim"):
+        row = ablation[prompt_name]
+        line = next(line for line in section.splitlines() if line.startswith(f"| {prompt_name} |"))
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        assert cells[3] == f"{row['coverage'] * 100:.1f}%"
+        assert cells[4] == f"{row['caught']}/48"
+        assert cells[5] == f"{row['missed']}/48"
+
+
+def test_ablation_decisions_match_a_detector_table_row_for_the_same_run(
+    judge_report: tuple[dict[str, Any], str],
+) -> None:
+    # The claim-audit ablation row is the cheapest judge's own Table B row.
+    bench_json, _ = judge_report
+    ablation = bench_json["ablation"]
+    decisions = bench_json["detectors"][f"judge:{ablation['model']}"]["decisions"]
+    audit = ablation["claim-audit"]
+    assert audit["caught"] == decisions["caught"]
+    assert audit["missed"] == decisions["missed"]
+    assert audit["coverage"] == pytest.approx(decisions["coverage"])

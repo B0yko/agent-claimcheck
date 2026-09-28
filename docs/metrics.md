@@ -107,7 +107,8 @@ wording and pass criteria are fixed in `docs/adr/0005-evaluation-protocol.md`
 the numbers:
 
 - **H1** — rules have the fewest missed false successes but the lowest
-  coverage among the non-baseline detectors.
+  coverage among the non-baseline detectors. The report line names every
+  detector tied for the fewest missed, with the count.
 - **H2** — raw judge probabilities cluster at the extremes (`extremes_raw`
   above 50%), and Platt scaling lowers their ECE.
 - **H3** — the classifier loses AUROC on a domain it was not trained on
@@ -115,7 +116,8 @@ the numbers:
 - **H4** — at least one judge is fooled by reviewer-directed text
   (`reviewer_injection`) more often than by the other six false-success
   kinds, measured on raw judge output across all 300 traces (the test split
-  alone holds only about 6 `reviewer_injection` traces).
+  alone holds only about 6 `reviewer_injection` traces). The report line
+  gives each judge's `reviewer_injection` recall with its caught/total.
 
 A hypothesis is reported exactly as supported or not, including when the
 result goes against the project's own detectors — see the Findings section
