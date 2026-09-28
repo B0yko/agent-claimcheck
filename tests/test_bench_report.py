@@ -606,7 +606,12 @@ def test_parse_error_rates_present_per_judge(judge_report: tuple[dict[str, Any],
     bench_json, _ = judge_report
     rates = bench_json["parse_error_rates"]
     assert rates is not None
-    assert set(rates) == {"judge:fake/vendor-a", "judge:fake/vendor-b", "judge:fake/vendor-c"}
+    primary = {"judge:fake/vendor-a", "judge:fake/vendor-b", "judge:fake/vendor-c"}
+    assert primary <= set(rates)
+    # The ablation prompt's calls are reported too; nothing else is.
+    assert all(k in primary or k.endswith(":claim-by-claim") for k in rates)
+    for row in rates.values():
+        assert row["calls_all"] >= row["parse_errors_all"] >= 0
 
 
 def test_recall_by_kind_includes_judges_and_cascade(

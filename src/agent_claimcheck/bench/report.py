@@ -437,14 +437,23 @@ def _parse_and_abstain_rates(
     judge_rows: Mapping[str, list[dict[str, Any]]],
 ) -> dict[str, dict[str, float]]:
     result: dict[str, dict[str, float]] = {}
-    for key in sorted(k for k in judge_rows if _judge_key_is_primary(k)):
-        test_rows = [r for r in judge_rows[key] if r["split"] == "test"]
+    for key in sorted(judge_rows):
+        rows = judge_rows[key]
+        test_rows = [r for r in rows if r["split"] == "test"]
         n = len(test_rows)
         if n == 0:
             continue
         parse_errors = sum(1 for r in test_rows if r["abstain_reason"] == "parse_error")
         abstained = sum(1 for r in test_rows if r["abstain"])
-        result[key] = {"parse_error_rate": parse_errors / n, "abstain_rate": abstained / n}
+        result[key] = {
+            "parse_error_rate": parse_errors / n,
+            "abstain_rate": abstained / n,
+            # Every call of the run, train and test: the rates above hide a
+            # parse error that happened on a train trace.
+            "parse_errors_all": sum(1 for r in rows if r["abstain_reason"] == "parse_error"),
+            "abstained_all": sum(1 for r in rows if r["abstain"]),
+            "calls_all": len(rows),
+        }
     return result
 
 
@@ -649,7 +658,16 @@ def build_report(recorded_dir: str | Path) -> tuple[dict[str, Any], str]:
                 tid: (judge_cost.get(tid, 0.0) if cascade_decided_by.get(tid) == "judge" else 0.0)
                 for tid in cascade_decided_by
             }
-            detectors["cascade"] = _detector_stats(cascade_test, cascade_latency, cascade_cost)
+            # Judges run concurrently, so the cascade's wall-clock rate is the
+            # rules pass plus the sent share of the best judge's measured rate,
+            # not a sum of individual call latencies.
+            n_sent = sum(1 for v in cascade_decided_by.values() if v == "judge")
+            best_wall = detectors[best_judge]["wall_s_per_1k"] if best_judge in detectors else 0.0
+            share_sent = n_sent / len(cascade_decided_by) if cascade_decided_by else 0.0
+            cascade_wall = detectors["rules"]["wall_s_per_1k"] + share_sent * best_wall
+            detectors["cascade"] = _detector_stats(
+                cascade_test, cascade_latency, cascade_cost, wall_s_per_1k=cascade_wall
+            )
 
         ablation = _ablation(judge_rows, rec.run_meta)
         parse_rates = _parse_and_abstain_rates(judge_rows)
@@ -1022,12 +1040,19 @@ def _render_markdown(bench_json: dict[str, Any]) -> str:
     if bench_json["parse_error_rates"] is None:
         lines.append("n/a (offline run)")
     else:
-        lines.append("| judge | parse-error rate | abstain rate |")
-        lines.append("|---|---|---|")
+        lines.append(
+            "| judge | parse-error rate (test) | abstain rate (test) "
+            "| parse errors (all calls) | abstentions (all calls) |"
+        )
+        lines.append("|---|---|---|---|---|")
         for key, rates in bench_json["parse_error_rates"].items():
             parse_rate = _fmt_pct(rates["parse_error_rate"])
             abstain_rate = _fmt_pct(rates["abstain_rate"])
-            lines.append(f"| {key} | {parse_rate} | {abstain_rate} |")
+            calls = rates["calls_all"]
+            lines.append(
+                f"| {key} | {parse_rate} | {abstain_rate} "
+                f"| {rates['parse_errors_all']}/{calls} | {rates['abstained_all']}/{calls} |"
+            )
     lines.append(f"cascade share sent to the judge: {_fmt_pct(bench_json['sent_to_judge_share'])}.")
     lines.append("")
 
