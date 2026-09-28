@@ -2,29 +2,29 @@
   "ablation": {
     "claim-audit": {
       "auroc": {
-        "ci_high": 0.9697880497685185,
-        "ci_low": 0.8616898148148148,
-        "value": 0.9194155092592593
+        "ci_high": 0.969788049769,
+        "ci_low": 0.861689814815,
+        "value": 0.919415509259
       },
       "caught": 26,
       "coverage": 0.525,
-      "ece_calibrated": 0.08978199325697507,
+      "ece_calibrated": 0.089781993257,
       "missed": 2,
       "n_failure": 48,
-      "usd_per_1k": 0.14589036458333332
+      "usd_per_1k": 0.145890364583
     },
     "claim-by-claim": {
       "auroc": {
-        "ci_high": 0.9583622685185186,
-        "ci_low": 0.836498119212963,
-        "value": 0.9004629629629629
+        "ci_high": 0.958362268519,
+        "ci_low": 0.836498119213,
+        "value": 0.900462962963
       },
       "caught": 20,
-      "coverage": 0.6916666666666667,
-      "ece_calibrated": 0.1135184876846106,
+      "coverage": 0.691666666667,
+      "ece_calibrated": 0.113518487685,
       "missed": 7,
       "n_failure": 48,
-      "usd_per_1k": 0.17911536458333333
+      "usd_per_1k": 0.179115364583
     },
     "model": "mistralai/mistral-small-3.2-24b-instruct"
   },
@@ -43,8 +43,8 @@
     "any-error": {
       "auroc": {
         "ci_high": 0.5,
-        "ci_low": 0.3541666666666667,
-        "value": 0.4270833333333333
+        "ci_low": 0.354166666667,
+        "value": 0.427083333333
       },
       "brier_calibrated": 0.525,
       "decisions": {
@@ -74,20 +74,20 @@
       "ece_raw": 0.525,
       "extremes_raw": 1.0,
       "n": 120,
-      "p50_ms": 0.002834014594554901,
-      "p95_ms": 0.004294048994779587,
+      "p50_ms": 0.00283401459455,
+      "p95_ms": 0.00429404899478,
       "usd_per_1k": 0.0,
-      "wall_s_per_1k": 0.003242365589054922
+      "wall_s_per_1k": 0.00324236558905
     },
     "cascade": {
       "auroc": {
-        "ci_high": 0.9780164930555556,
-        "ci_low": 0.8697916666666666,
-        "value": 0.9282407407407407
+        "ci_high": 0.978016493056,
+        "ci_low": 0.869791666667,
+        "value": 0.928240740741
       },
-      "brier_calibrated": 0.06513726055955844,
+      "brier_calibrated": 0.0651372605596,
       "decisions": {
-        "accuracy_on_decided": 0.9396551724137931,
+        "accuracy_on_decided": 0.939655172414,
         "caught": 40,
         "confusion": {
           "failure": {
@@ -101,7 +101,7 @@
             "verified": 69
           }
         },
-        "coverage": 0.9666666666666667,
+        "coverage": 0.966666666667,
         "false_alarms": 0,
         "missed": 7,
         "n": 120,
@@ -109,24 +109,24 @@
         "n_success": 72,
         "sent_to_review": 4
       },
-      "ece_calibrated": 0.03932385309662281,
-      "ece_raw": 0.06483333333333319,
+      "ece_calibrated": 0.0393238530966,
+      "ece_raw": 0.0648333333333,
       "extremes_raw": 0.825,
       "n": 120,
-      "p50_ms": 0.11224998161196709,
-      "p95_ms": 3580.0474417221258,
-      "usd_per_1k": 0.06514458333333334,
-      "wall_s_per_1k": 121.22265485212363
+      "p50_ms": 0.112249981612,
+      "p95_ms": 3580.04744172,
+      "usd_per_1k": 0.0651445833333,
+      "wall_s_per_1k": 121.222654852
     },
     "cascade-offline": {
       "auroc": {
-        "ci_high": 0.9887152777777778,
-        "ci_low": 0.9042245370370371,
+        "ci_high": 0.988715277778,
+        "ci_low": 0.904224537037,
         "value": 0.953125
       },
-      "brier_calibrated": 0.05262861920543031,
+      "brier_calibrated": 0.0526286192054,
       "decisions": {
-        "accuracy_on_decided": 0.963302752293578,
+        "accuracy_on_decided": 0.963302752294,
         "caught": 41,
         "confusion": {
           "failure": {
@@ -140,7 +140,7 @@
             "verified": 64
           }
         },
-        "coverage": 0.9083333333333333,
+        "coverage": 0.908333333333,
         "false_alarms": 0,
         "missed": 4,
         "n": 120,
@@ -148,24 +148,24 @@
         "n_success": 72,
         "sent_to_review": 11
       },
-      "ece_calibrated": 0.04934215970321745,
-      "ece_raw": 0.059734590532107855,
-      "extremes_raw": 0.7333333333333333,
+      "ece_calibrated": 0.0493421597032,
+      "ece_raw": 0.0597345905321,
+      "extremes_raw": 0.733333333333,
       "n": 120,
-      "p50_ms": 0.11089595500379801,
-      "p95_ms": 0.4647812747862184,
+      "p50_ms": 0.110895955004,
+      "p95_ms": 0.464781274786,
       "usd_per_1k": 0.0,
-      "wall_s_per_1k": 0.18370346321413916
+      "wall_s_per_1k": 0.183703463214
     },
     "classifier-lr": {
       "auroc": {
-        "ci_high": 0.9855396412037037,
-        "ci_low": 0.891478587962963,
-        "value": 0.9470486111111112
+        "ci_high": 0.985539641204,
+        "ci_low": 0.891478587963,
+        "value": 0.947048611111
       },
-      "brier_calibrated": 0.08166462184348132,
+      "brier_calibrated": 0.0816646218435,
       "decisions": {
-        "accuracy_on_decided": 0.9753086419753086,
+        "accuracy_on_decided": 0.975308641975,
         "caught": 32,
         "confusion": {
           "failure": {
@@ -187,22 +187,22 @@
         "n_success": 72,
         "sent_to_review": 39
       },
-      "ece_calibrated": 0.08261240975000937,
-      "ece_raw": 0.055887981591158084,
-      "extremes_raw": 0.5666666666666667,
+      "ece_calibrated": 0.08261240975,
+      "ece_raw": 0.0558879815912,
+      "extremes_raw": 0.566666666667,
       "n": 120,
-      "p50_ms": 0.11039600940421224,
-      "p95_ms": 0.25411699316464215,
+      "p50_ms": 0.110396009404,
+      "p95_ms": 0.254116993165,
       "usd_per_1k": 0.0,
-      "wall_s_per_1k": 0.172349678662916
+      "wall_s_per_1k": 0.172349678663
     },
     "judge:deepseek/deepseek-v4-flash": {
       "auroc": {
-        "ci_high": 0.9048068576388888,
-        "ci_low": 0.7686559606481481,
-        "value": 0.8396990740740741
+        "ci_high": 0.904806857639,
+        "ci_low": 0.768655960648,
+        "value": 0.839699074074
       },
-      "brier_calibrated": 0.14405456906746358,
+      "brier_calibrated": 0.144054569067,
       "decisions": {
         "accuracy_on_decided": 0.9,
         "caught": 0,
@@ -218,7 +218,7 @@
             "verified": 45
           }
         },
-        "coverage": 0.4166666666666667,
+        "coverage": 0.416666666667,
         "false_alarms": 0,
         "missed": 5,
         "n": 120,
@@ -226,24 +226,24 @@
         "n_success": 72,
         "sent_to_review": 70
       },
-      "ece_calibrated": 0.035320759744336544,
-      "ece_raw": 0.19166666666666662,
-      "extremes_raw": 0.6083333333333333,
+      "ece_calibrated": 0.0353207597443,
+      "ece_raw": 0.191666666667,
+      "extremes_raw": 0.608333333333,
       "n": 120,
-      "p50_ms": 2157.339770521503,
-      "p95_ms": 3079.182150377892,
-      "usd_per_1k": 0.05862400333333334,
-      "wall_s_per_1k": 345.1038488865985
+      "p50_ms": 2157.33977052,
+      "p95_ms": 3079.18215038,
+      "usd_per_1k": 0.0586240033333,
+      "wall_s_per_1k": 345.103848887
     },
     "judge:mistralai/mistral-small-3.2-24b-instruct": {
       "auroc": {
-        "ci_high": 0.9697880497685185,
-        "ci_low": 0.8616898148148148,
-        "value": 0.9194155092592593
+        "ci_high": 0.969788049769,
+        "ci_low": 0.861689814815,
+        "value": 0.919415509259
       },
-      "brier_calibrated": 0.11452283280446861,
+      "brier_calibrated": 0.114522832804,
       "decisions": {
-        "accuracy_on_decided": 0.9682539682539683,
+        "accuracy_on_decided": 0.968253968254,
         "caught": 26,
         "confusion": {
           "failure": {
@@ -265,24 +265,24 @@
         "n_success": 72,
         "sent_to_review": 57
       },
-      "ece_calibrated": 0.08978199325697507,
-      "ece_raw": 0.054166666666666606,
+      "ece_calibrated": 0.089781993257,
+      "ece_raw": 0.0541666666667,
       "extremes_raw": 0.525,
       "n": 120,
-      "p50_ms": 2606.1798335285857,
-      "p95_ms": 3542.364379786886,
-      "usd_per_1k": 0.14589036458333332,
-      "wall_s_per_1k": 343.02423458352376
+      "p50_ms": 2606.17983353,
+      "p95_ms": 3542.36437979,
+      "usd_per_1k": 0.145890364583,
+      "wall_s_per_1k": 343.024234584
     },
     "judge:qwen/qwen3-235b-a22b-2507": {
       "auroc": {
-        "ci_high": 0.9641276041666667,
-        "ci_low": 0.8553240740740741,
-        "value": 0.9108796296296297
+        "ci_high": 0.964127604167,
+        "ci_low": 0.855324074074,
+        "value": 0.91087962963
       },
-      "brier_calibrated": 0.07964190982087506,
+      "brier_calibrated": 0.0796419098209,
       "decisions": {
-        "accuracy_on_decided": 0.9252336448598131,
+        "accuracy_on_decided": 0.92523364486,
         "caught": 31,
         "confusion": {
           "failure": {
@@ -296,7 +296,7 @@
             "verified": 68
           }
         },
-        "coverage": 0.8916666666666667,
+        "coverage": 0.891666666667,
         "false_alarms": 0,
         "missed": 8,
         "n": 120,
@@ -304,24 +304,24 @@
         "n_success": 72,
         "sent_to_review": 13
       },
-      "ece_calibrated": 0.032770411066106744,
-      "ece_raw": 0.12291666666666659,
-      "extremes_raw": 0.8666666666666667,
+      "ece_calibrated": 0.0327704110661,
+      "ece_raw": 0.122916666667,
+      "extremes_raw": 0.866666666667,
       "n": 120,
-      "p50_ms": 3101.293333515059,
-      "p95_ms": 5803.976066666654,
-      "usd_per_1k": 0.21116554166666665,
-      "wall_s_per_1k": 403.68739347322844
+      "p50_ms": 3101.29333352,
+      "p95_ms": 5803.97606667,
+      "usd_per_1k": 0.211165541667,
+      "wall_s_per_1k": 403.687393473
     },
     "rules": {
       "auroc": {
-        "ci_high": 0.9629774305555555,
-        "ci_low": 0.8477864583333333,
-        "value": 0.9097222222222222
+        "ci_high": 0.962977430556,
+        "ci_low": 0.847786458333,
+        "value": 0.909722222222
       },
-      "brier_calibrated": 0.0902774605271676,
+      "brier_calibrated": 0.0902774605272,
       "decisions": {
-        "accuracy_on_decided": 0.9523809523809523,
+        "accuracy_on_decided": 0.952380952381,
         "caught": 36,
         "confusion": {
           "failure": {
@@ -343,14 +343,14 @@
         "n_success": 72,
         "sent_to_review": 36
       },
-      "ece_calibrated": 0.0696915887845841,
-      "ece_raw": 0.056500000000000015,
-      "extremes_raw": 0.5583333333333333,
+      "ece_calibrated": 0.0696915887846,
+      "ece_raw": 0.0565,
+      "extremes_raw": 0.558333333333,
       "n": 120,
-      "p50_ms": 0.08312496356666088,
-      "p95_ms": 0.29234309913590534,
+      "p50_ms": 0.0831249635667,
+      "p95_ms": 0.292343099136,
       "usd_per_1k": 0.0,
-      "wall_s_per_1k": 0.11643681015508871
+      "wall_s_per_1k": 0.116436810155
     },
     "trust-agent": {
       "auroc": {
@@ -386,10 +386,10 @@
       "ece_raw": 0.4,
       "extremes_raw": 1.0,
       "n": 120,
-      "p50_ms": 0.003249966539442539,
-      "p95_ms": 0.005137565312907099,
+      "p50_ms": 0.00324996653944,
+      "p95_ms": 0.00513756531291,
       "usd_per_1k": 0.0,
-      "wall_s_per_1k": 0.004996917171714206
+      "wall_s_per_1k": 0.00499691717171
     }
   },
   "evidence_breakdown": {
@@ -405,9 +405,9 @@
       },
       "state_probe": {
         "auroc": {
-          "ci_high": 0.9837101063829787,
-          "ci_low": 0.8670212765957447,
-          "value": 0.9335106382978723
+          "ci_high": 0.983710106383,
+          "ci_low": 0.867021276596,
+          "value": 0.933510638298
         },
         "missed": 4,
         "n": 79
@@ -425,9 +425,9 @@
       },
       "state_probe": {
         "auroc": {
-          "ci_high": 0.9847074468085106,
+          "ci_high": 0.984707446809,
           "ci_low": 0.875,
-          "value": 0.9361702127659575
+          "value": 0.936170212766
         },
         "missed": 4,
         "n": 79
@@ -445,9 +445,9 @@
       },
       "state_probe": {
         "auroc": {
-          "ci_high": 0.9893783244680852,
-          "ci_low": 0.8603723404255319,
-          "value": 0.9361702127659575
+          "ci_high": 0.989378324468,
+          "ci_low": 0.860372340426,
+          "value": 0.936170212766
         },
         "missed": 2,
         "n": 79
@@ -465,9 +465,9 @@
       },
       "state_probe": {
         "auroc": {
-          "ci_high": 0.9152260638297872,
-          "ci_low": 0.757637965425532,
-          "value": 0.8377659574468085
+          "ci_high": 0.91522606383,
+          "ci_low": 0.757637965426,
+          "value": 0.837765957447
         },
         "missed": 2,
         "n": 79
@@ -485,9 +485,9 @@
       },
       "state_probe": {
         "auroc": {
-          "ci_high": 0.9906998005319149,
-          "ci_low": 0.899576130319149,
-          "value": 0.9517952127659575
+          "ci_high": 0.990699800532,
+          "ci_low": 0.899576130319,
+          "value": 0.951795212766
         },
         "missed": 1,
         "n": 79
@@ -505,9 +505,9 @@
       },
       "state_probe": {
         "auroc": {
-          "ci_high": 0.9840425531914894,
-          "ci_low": 0.8533909574468085,
-          "value": 0.9202127659574468
+          "ci_high": 0.984042553191,
+          "ci_low": 0.853390957447,
+          "value": 0.920212765957
         },
         "missed": 5,
         "n": 79
@@ -525,9 +525,9 @@
       },
       "state_probe": {
         "auroc": {
-          "ci_high": 0.9837101063829787,
-          "ci_low": 0.8670212765957447,
-          "value": 0.9335106382978723
+          "ci_high": 0.983710106383,
+          "ci_low": 0.867021276596,
+          "value": 0.933510638298
         },
         "missed": 4,
         "n": 79
@@ -537,12 +537,12 @@
   "hypotheses": {
     "h1": {
       "coverage": {
-        "cascade": 0.9666666666666667,
-        "cascade-offline": 0.9083333333333333,
+        "cascade": 0.966666666667,
+        "cascade-offline": 0.908333333333,
         "classifier-lr": 0.675,
-        "judge:deepseek/deepseek-v4-flash": 0.4166666666666667,
+        "judge:deepseek/deepseek-v4-flash": 0.416666666667,
         "judge:mistralai/mistral-small-3.2-24b-instruct": 0.525,
-        "judge:qwen/qwen3-235b-a22b-2507": 0.8916666666666667,
+        "judge:qwen/qwen3-235b-a22b-2507": 0.891666666667,
         "rules": 0.7
       },
       "missed": {
@@ -559,21 +559,21 @@
     "h2": {
       "judges": {
         "judge:deepseek/deepseek-v4-flash": {
-          "ece_calibrated": 0.035320759744336544,
-          "ece_raw": 0.19166666666666662,
-          "extremes_raw": 0.6083333333333333,
+          "ece_calibrated": 0.0353207597443,
+          "ece_raw": 0.191666666667,
+          "extremes_raw": 0.608333333333,
           "ok": true
         },
         "judge:mistralai/mistral-small-3.2-24b-instruct": {
-          "ece_calibrated": 0.08978199325697507,
-          "ece_raw": 0.054166666666666606,
+          "ece_calibrated": 0.089781993257,
+          "ece_raw": 0.0541666666667,
           "extremes_raw": 0.525,
           "ok": false
         },
         "judge:qwen/qwen3-235b-a22b-2507": {
-          "ece_calibrated": 0.032770411066106744,
-          "ece_raw": 0.12291666666666659,
-          "extremes_raw": 0.8666666666666667,
+          "ece_calibrated": 0.0327704110661,
+          "ece_raw": 0.122916666667,
+          "extremes_raw": 0.866666666667,
           "ok": true
         }
       },
@@ -583,18 +583,18 @@
       "domains": {
         "booking": {
           "below": false,
-          "lodo_auroc": 0.9479166666666666,
-          "shipped_auroc": 0.9192708333333334
+          "lodo_auroc": 0.947916666667,
+          "shipped_auroc": 0.919270833333
         },
         "coding": {
           "below": true,
-          "lodo_auroc": 0.9479166666666666,
+          "lodo_auroc": 0.947916666667,
           "shipped_auroc": 0.96875
         },
         "crm": {
           "below": false,
           "lodo_auroc": 0.96875,
-          "shipped_auroc": 0.9661458333333334
+          "shipped_auroc": 0.966145833333
         }
       },
       "supported": false
@@ -604,25 +604,25 @@
         "judge:deepseek/deepseek-v4-flash": {
           "fooled": false,
           "n_traces": 300,
-          "other_mean_recall": 0.8240740740740741,
+          "other_mean_recall": 0.824074074074,
           "reviewer_injection_caught": 11,
-          "reviewer_injection_recall": 0.9166666666666666,
+          "reviewer_injection_recall": 0.916666666667,
           "reviewer_injection_total": 12
         },
         "judge:mistralai/mistral-small-3.2-24b-instruct": {
           "fooled": false,
           "n_traces": 300,
-          "other_mean_recall": 0.5277777777777778,
+          "other_mean_recall": 0.527777777778,
           "reviewer_injection_caught": 10,
-          "reviewer_injection_recall": 0.8333333333333334,
+          "reviewer_injection_recall": 0.833333333333,
           "reviewer_injection_total": 12
         },
         "judge:qwen/qwen3-235b-a22b-2507": {
           "fooled": false,
           "n_traces": 300,
-          "other_mean_recall": 0.5555555555555556,
+          "other_mean_recall": 0.555555555556,
           "reviewer_injection_caught": 10,
-          "reviewer_injection_recall": 0.8333333333333334,
+          "reviewer_injection_recall": 0.833333333333,
           "reviewer_injection_total": 12
         }
       },
@@ -640,27 +640,27 @@
       "lodo_auroc": {
         "ci_high": 1.0,
         "ci_low": 0.85390625,
-        "value": 0.9479166666666666
+        "value": 0.947916666667
       },
-      "lodo_ece": 0.12773483306266584,
+      "lodo_ece": 0.127734833063,
       "n": 40,
       "shipped_auroc": {
         "ci_high": 1.0,
-        "ci_low": 0.7863932291666667,
-        "value": 0.9192708333333334
+        "ci_low": 0.786393229167,
+        "value": 0.919270833333
       }
     },
     "coding": {
       "lodo_auroc": {
         "ci_high": 1.0,
         "ci_low": 0.8619140625,
-        "value": 0.9479166666666666
+        "value": 0.947916666667
       },
-      "lodo_ece": 0.09446037548139596,
+      "lodo_ece": 0.0944603754814,
       "n": 40,
       "shipped_auroc": {
         "ci_high": 1.0,
-        "ci_low": 0.9088541666666666,
+        "ci_low": 0.908854166667,
         "value": 0.96875
       }
     },
@@ -670,12 +670,12 @@
         "ci_low": 0.9087890625,
         "value": 0.96875
       },
-      "lodo_ece": 0.15424545163151113,
+      "lodo_ece": 0.154245451632,
       "n": 40,
       "shipped_auroc": {
         "ci_high": 1.0,
         "ci_low": 0.8984375,
-        "value": 0.9661458333333334
+        "value": 0.966145833333
       }
     }
   },
@@ -941,7 +941,7 @@
       {
         "id": "mistralai/mistral-small-3.2-24b-instruct",
         "json_mode": true,
-        "max_price_in_per_m": 0.09999999999999999,
+        "max_price_in_per_m": 0.1,
         "max_price_out_per_m": 0.3,
         "price_date": "2026-09-28",
         "price_in_per_m": 0.09375,
@@ -959,7 +959,7 @@
         "supports_reasoning": false
       }
     ],
-    "total_spend_usd": 0.17892774645000012
+    "total_spend_usd": 0.17892774645
   },
   "run": {
     "command": "agent-claimcheck bench --live --judges deepseek/deepseek-v4-flash,qwen/qwen3-235b-a22b-2507,mistralai/mistral-small-3.2-24b-instruct --ablation-judge mistralai/mistral-small-3.2-24b-instruct --ablation-prompt claim-by-claim --run-name v0.1.0 --max-usd 8.0 --concurrency 8 --out results/v0.1.0",
@@ -968,10 +968,10 @@
     "date": "2026-09-28",
     "hardware": "MacBook Air M5, 24 GB",
     "judge_wall_clock_s": {
-      "judge:deepseek/deepseek-v4-flash": 103.53115466597956,
-      "judge:mistralai/mistral-small-3.2-24b-instruct": 102.90727037505712,
-      "judge:mistralai/mistral-small-3.2-24b-instruct:claim-by-claim": 204.00959399994463,
-      "judge:qwen/qwen3-235b-a22b-2507": 121.10621804196853
+      "judge:deepseek/deepseek-v4-flash": 103.531154666,
+      "judge:mistralai/mistral-small-3.2-24b-instruct": 102.907270375,
+      "judge:mistralai/mistral-small-3.2-24b-instruct:claim-by-claim": 204.009594,
+      "judge:qwen/qwen3-235b-a22b-2507": 121.106218042
     },
     "judges": [
       {
@@ -987,7 +987,7 @@
       {
         "id": "mistralai/mistral-small-3.2-24b-instruct",
         "json_mode": true,
-        "max_price_in_per_m": 0.09999999999999999,
+        "max_price_in_per_m": 0.1,
         "max_price_out_per_m": 0.3,
         "price_date": "2026-09-28",
         "price_in_per_m": 0.09375,
@@ -1007,7 +1007,7 @@
     ],
     "package_version": "0.1.0",
     "run_name": "v0.1.0",
-    "total_spend_usd": 0.17892774645000012
+    "total_spend_usd": 0.17892774645
   },
   "sent_to_judge_share": 0.3
 }
