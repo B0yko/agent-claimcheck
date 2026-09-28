@@ -15,7 +15,7 @@ claims:
       updated_fields: { exists: true }
     probe: "crm.read_record"
     probe_checks:
-      fields: { subset: "{subject.fields}" }
+      fields: { contains: "{subject.fields}" }
   note_added:
     action: "crm.add_note"
     receipt:

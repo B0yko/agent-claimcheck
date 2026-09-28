@@ -65,9 +65,8 @@ receipt:
 | `exists: true|false` | whether the field is present at all |
 | `equals: v` | equality (see normalisers below) |
 | `in: [v, ...]` | membership: equal to any one of the list |
-| `contains: v` | substring (field is a string) or membership (field is a list) |
+| `contains: v` | substring (field is a string), membership (field is a list), or every key of the mapping `v` present with an equal value (field is an object) |
 | `matches: regex` | `re.search(regex, str(field))` |
-| `subset: v` | every key in the mapping `v` is present in the field with an equal value (field and `v` must both be objects) |
 
 Each check declares exactly one operator, plus an optional `as` normaliser:
 
