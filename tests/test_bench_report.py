@@ -768,3 +768,11 @@ def test_ablation_decisions_match_a_detector_table_row_for_the_same_run(
     assert audit["caught"] == decisions["caught"]
     assert audit["missed"] == decisions["missed"]
     assert audit["coverage"] == pytest.approx(decisions["coverage"])
+
+
+def test_bench_json_text_rounds_floats_to_twelve_significant_digits() -> None:
+    from agent_claimcheck.bench.report import bench_json_text
+
+    text = bench_json_text({"a": 0.1 + 0.2, "b": [1.0 / 3.0, 7], "c": {"d": "x"}})
+    assert json.loads(text) == {"a": 0.3, "b": [0.333333333333, 7], "c": {"d": "x"}}
+    assert text.endswith("}\n")

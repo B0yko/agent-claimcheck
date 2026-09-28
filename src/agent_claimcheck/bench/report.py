@@ -934,6 +934,28 @@ def _h4_line(h4: Mapping[str, Any]) -> str:
     )
 
 
+def _round_floats(obj: Any) -> Any:
+    if isinstance(obj, float):
+        return float(f"{obj:.12g}")
+    if isinstance(obj, dict):
+        return {k: _round_floats(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_round_floats(v) for v in obj]
+    return obj
+
+
+def bench_json_text(bench_json: dict[str, Any]) -> str:
+    """Serialise bench.json with every float rounded to 12 significant digits.
+
+    The metrics are recomputed from recorded predictions, but numpy's `exp`
+    and `log` can differ in the last bit between CPUs and Python builds; the
+    rounding keeps the file byte-identical across machines without touching
+    any value the Markdown report prints.
+    """
+    text = json.dumps(_round_floats(bench_json), indent=2, sort_keys=True, ensure_ascii=False)
+    return text + "\n"
+
+
 def _render_markdown(bench_json: dict[str, Any]) -> str:
     d = bench_json["dataset"]
     lines: list[str] = []

@@ -633,6 +633,7 @@ def bench(
 
     from agent_claimcheck import __version__
     from agent_claimcheck.bench.report import (
+        bench_json_text,
         build_report,
         check_readme_diff,
         histogram_svg_for,
@@ -702,9 +703,7 @@ def bench(
     if out is not None:
         write_dir = Path(out)
         write_dir.mkdir(parents=True, exist_ok=True)
-        (write_dir / "bench.json").write_text(
-            json.dumps(bench_json, indent=2, sort_keys=True, ensure_ascii=False) + "\n", "utf-8"
-        )
+        (write_dir / "bench.json").write_text(bench_json_text(bench_json), "utf-8")
         (write_dir / "bench.md").write_text(bench_md, encoding="utf-8")
         (write_dir / "reliability.svg").write_text(
             reliability_svg_for(recorded_dir), encoding="utf-8"
