@@ -54,7 +54,9 @@ class RulesDetector:
                 ],
             )
 
-        worst = max(outcomes, key=lambda o: OUTCOME_ORDER.index(o.outcome))
+        # OUTCOME_ORDER lists worst-first, so the worst outcome has the
+        # smallest index.
+        worst = min(outcomes, key=lambda o: OUTCOME_ORDER.index(o.outcome))
         reasons = [
             Reason(claim=o.claim_type, outcome=o.outcome, step=o.step, detail=o.detail[:200])
             for o in outcomes
