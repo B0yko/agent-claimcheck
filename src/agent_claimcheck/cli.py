@@ -314,6 +314,100 @@ def check(
     raise typer.Exit(code=1 if fail_on_set & set(counts) else 0)
 
 
+@app.command()
+def bench(
+    offline: bool = typer.Option(
+        False, "--offline", help="Score every offline detector on the packaged benchmark."
+    ),
+    from_recorded: str | None = typer.Option(
+        None,
+        "--from-recorded",
+        help="Recorded directory or alias (e.g. recorded:v0.1.0) to replay.",
+    ),
+    out: str | None = typer.Option(
+        None,
+        "--out",
+        help="Output directory (required with --offline; optional with --from-recorded).",
+    ),
+    check_readme: str | None = typer.Option(
+        None, "--check-readme", help="README to check the bench:start/bench:end block against."
+    ),
+) -> None:
+    """Run or replay the offline benchmark and render the README numbers."""
+    import hashlib
+    import time
+    from datetime import UTC, datetime
+
+    from agent_claimcheck import __version__
+    from agent_claimcheck.bench.report import (
+        build_report,
+        check_readme_diff,
+        histogram_svg_for,
+        reliability_svg_for,
+        verify_judge_requests,
+    )
+    from agent_claimcheck.bench.runner import run_offline
+    from agent_claimcheck.resources import path as resource_path
+
+    if offline == (from_recorded is not None):
+        error_console.print("error: pass exactly one of --offline or --from-recorded")
+        raise typer.Exit(code=2)
+
+    if offline:
+        if out is None:
+            error_console.print("error: --offline requires --out")
+            raise typer.Exit(code=2)
+        train = load_traces_report("bench:train").traces
+        test = load_traces_report("bench:test").traces
+        test_bytes = resource_path("bench:test").read_bytes()
+        dataset_sha256 = hashlib.sha256(test_bytes).hexdigest()
+        start = time.perf_counter()
+        run_offline(
+            train,
+            test,
+            out,
+            command="agent-claimcheck bench --offline --out " + out,
+            date=datetime.now(UTC).date().isoformat(),
+            package_version=__version__,
+            dataset_sha256=dataset_sha256,
+        )
+        console.print(
+            f"scored {len(train)} train + {len(test)} test traces in {out} "
+            f"({time.perf_counter() - start:.1f}s)"
+        )
+        recorded_dir = out
+    else:
+        assert from_recorded is not None
+        recorded_dir = from_recorded
+        mismatches = verify_judge_requests(recorded_dir)
+        if mismatches:
+            for m in mismatches:
+                error_console.print(f"error: {m}")
+            raise typer.Exit(code=2)
+
+    bench_json, bench_md = build_report(recorded_dir)
+
+    if out is not None:
+        write_dir = Path(out)
+        write_dir.mkdir(parents=True, exist_ok=True)
+        (write_dir / "bench.json").write_text(
+            json.dumps(bench_json, indent=2, sort_keys=True, ensure_ascii=False) + "\n", "utf-8"
+        )
+        (write_dir / "bench.md").write_text(bench_md, encoding="utf-8")
+        (write_dir / "reliability.svg").write_text(
+            reliability_svg_for(recorded_dir), encoding="utf-8"
+        )
+        (write_dir / "histogram.svg").write_text(histogram_svg_for(recorded_dir), encoding="utf-8")
+
+    console.print(bench_md)
+
+    if check_readme is not None:
+        diff = check_readme_diff(check_readme, bench_md)
+        if diff is not None:
+            console.print(diff)
+            raise typer.Exit(code=1)
+
+
 @dataset_app.command("generate")
 def dataset_generate(
     seed: int = typer.Option(20260924, "--seed", help="Seed for the deterministic generator."),
