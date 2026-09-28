@@ -58,3 +58,12 @@ def test_benchmark_v1_is_included_in_the_wheel(wheel: zipfile.ZipFile) -> None:
         packaged_path = f"agent_claimcheck/_data/benchmark/v1/{filename}"
         assert packaged_path in names
         assert wheel.read(packaged_path) == (bench_dir / filename).read_bytes()
+
+
+def test_judge_prompts_are_included_in_the_wheel(wheel: zipfile.ZipFile) -> None:
+    names = set(wheel.namelist())
+    prompts_dir = REPO_ROOT / "src" / "agent_claimcheck" / "judge" / "prompts"
+    for prompt in ("claim-audit", "claim-by-claim"):
+        packaged_path = f"agent_claimcheck/judge/prompts/{prompt}.md"
+        assert packaged_path in names
+        assert wheel.read(packaged_path) == (prompts_dir / f"{prompt}.md").read_bytes()
