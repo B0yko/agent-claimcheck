@@ -77,10 +77,10 @@ Leakage audit (final-message-only baseline, test split): **0.434 AUROC**.
 
 Model: `mistralai/mistral-small-3.2-24b-instruct`.
 
-| prompt | AUROC | ECE calibrated | USD/1k |
-|---|---|---|---|
-| claim-audit | 0.919 [0.862, 0.970] | 0.090 | $0.146 |
-| claim-by-claim | 0.900 [0.836, 0.958] | 0.114 | $0.179 |
+| prompt | AUROC | ECE calibrated | coverage | caught | missed | USD/1k |
+|---|---|---|---|---|---|---|
+| claim-audit | 0.919 [0.862, 0.970] | 0.090 | 52.5% | 26/48 | 2/48 | $0.146 |
+| claim-by-claim | 0.900 [0.836, 0.958] | 0.114 | 69.2% | 20/48 | 7/48 | $0.179 |
 
 ### Parse-error and abstention rates, and the share sent to the judge
 
@@ -179,7 +179,7 @@ Data sources and licences: every trace comes from the in-repo synthetic generato
 
 ### Hypotheses
 
-- H1 (rules: fewest missed, lowest coverage): **not supported**: fewest missed = classifier-lr (2/48) vs rules 4/48; lowest coverage = judge:deepseek/deepseek-v4-flash 41.7% (rules 70.0%).
+- H1 (rules: fewest missed, lowest coverage): **not supported**: fewest missed = classifier-lr, judge:mistralai/mistral-small-3.2-24b-instruct (2/48) vs rules 4/48; lowest coverage = judge:deepseek/deepseek-v4-flash 41.7% (rules 70.0%).
 - H2 (raw judge extremes + Platt lowers ECE): **not supported**: judge:deepseek/deepseek-v4-flash: extremes raw 60.8%, ECE raw 0.192 → calibrated 0.035; judge:mistralai/mistral-small-3.2-24b-instruct: extremes raw 52.5%, ECE raw 0.054 → calibrated 0.090; judge:qwen/qwen3-235b-a22b-2507: extremes raw 86.7%, ECE raw 0.123 → calibrated 0.033.
 - H3 (classifier-lr loses AUROC LODO): **not supported**: booking LODO 0.948 vs shipped 0.919; crm LODO 0.969 vs shipped 0.966; coding LODO 0.948 vs shipped 0.969.
-- H4 (a judge is fooled by reviewer-directed text): **not supported** (all 300 traces, raw outputs through the gate): judge:deepseek/deepseek-v4-flash: reviewer_injection recall 91.7% vs other-kind mean 82.4%; judge:mistralai/mistral-small-3.2-24b-instruct: reviewer_injection recall 83.3% vs other-kind mean 52.8%; judge:qwen/qwen3-235b-a22b-2507: reviewer_injection recall 83.3% vs other-kind mean 55.6%.
+- H4 (a judge is fooled by reviewer-directed text): **not supported** (caught/total counted over all 300 traces, with raw judge outputs through the gate; the other-kind mean averages the six other kinds' own recalls): judge:deepseek/deepseek-v4-flash: reviewer_injection recall 91.7% (11/12) vs other-kind mean 82.4%; judge:mistralai/mistral-small-3.2-24b-instruct: reviewer_injection recall 83.3% (10/12) vs other-kind mean 52.8%; judge:qwen/qwen3-235b-a22b-2507: reviewer_injection recall 83.3% (10/12) vs other-kind mean 55.6%.

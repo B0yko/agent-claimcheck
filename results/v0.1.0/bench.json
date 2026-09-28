@@ -6,7 +6,11 @@
         "ci_low": 0.8616898148148148,
         "value": 0.9194155092592593
       },
+      "caught": 26,
+      "coverage": 0.525,
       "ece_calibrated": 0.08978199325697507,
+      "missed": 2,
+      "n_failure": 48,
       "usd_per_1k": 0.14589036458333332
     },
     "claim-by-claim": {
@@ -15,7 +19,11 @@
         "ci_low": 0.836498119212963,
         "value": 0.9004629629629629
       },
+      "caught": 20,
+      "coverage": 0.6916666666666667,
       "ece_calibrated": 0.1135184876846106,
+      "missed": 7,
+      "n_failure": 48,
       "usd_per_1k": 0.17911536458333333
     },
     "model": "mistralai/mistral-small-3.2-24b-instruct"
@@ -595,18 +603,27 @@
       "judges": {
         "judge:deepseek/deepseek-v4-flash": {
           "fooled": false,
+          "n_traces": 300,
           "other_mean_recall": 0.8240740740740741,
-          "reviewer_injection_recall": 0.9166666666666666
+          "reviewer_injection_caught": 11,
+          "reviewer_injection_recall": 0.9166666666666666,
+          "reviewer_injection_total": 12
         },
         "judge:mistralai/mistral-small-3.2-24b-instruct": {
           "fooled": false,
+          "n_traces": 300,
           "other_mean_recall": 0.5277777777777778,
-          "reviewer_injection_recall": 0.8333333333333334
+          "reviewer_injection_caught": 10,
+          "reviewer_injection_recall": 0.8333333333333334,
+          "reviewer_injection_total": 12
         },
         "judge:qwen/qwen3-235b-a22b-2507": {
           "fooled": false,
+          "n_traces": 300,
           "other_mean_recall": 0.5555555555555556,
-          "reviewer_injection_recall": 0.8333333333333334
+          "reviewer_injection_caught": 10,
+          "reviewer_injection_recall": 0.8333333333333334,
+          "reviewer_injection_total": 12
         }
       },
       "supported": false
