@@ -1,0 +1,61 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-claimcheck"
+version = "0.1.0"
+description = "Check AI agent success claims against trace evidence instead of trusting the final message."
+license = { file = "LICENSE" }
+authors = [
+    { name = "Andrii Boiko", email = "142843700+B0yko@users.noreply.github.com" },
+]
+requires-python = ">=3.12"
+dependencies = [
+    "typer",
+    "rich",
+    "pydantic>=2",
+    "jsonschema",
+    "httpx",
+    "pyyaml",
+    "numpy",
+    "scikit-learn",
+    "tzdata",
+]
+
+[project.scripts]
+agent-claimcheck = "agent_claimcheck.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+    "mypy",
+    "types-PyYAML",
+    "types-jsonschema",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent_claimcheck"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"schemas/agent-trace-v1.json" = "agent_claimcheck/schemas/agent-trace-v1.json"
+"examples" = "agent_claimcheck/_data/examples"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "W"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+
+[[tool.mypy.overrides]]
+module = "sklearn.*"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
