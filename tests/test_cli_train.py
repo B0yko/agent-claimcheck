@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import json
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Any
 
+import pytest
 from typer.testing import CliRunner
 
 from agent_claimcheck.cli import app
@@ -110,10 +114,90 @@ def test_train_rejects_unsupported_calibrate_key(tmp_path: Path) -> None:
     _write_jsonl(input_path, rows)
 
     result = runner.invoke(
-        app, ["train", str(input_path), "--out", str(tmp_path / "out"), "--calibrate", "judge"]
+        app, ["train", str(input_path), "--out", str(tmp_path / "out"), "--calibrate", "bogus"]
     )
     assert result.exit_code == 2
-    assert "judge" in result.output
+    assert "bogus" in result.output
+
+
+def test_train_calibrate_judge_runs_the_configured_judge(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    content = json.dumps(
+        {
+            "p_success": 0.8,
+            "failure_kind": "none",
+            "evidence_steps": [1],
+            "rationale": "looks fine",
+        }
+    )
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            length = int(self.headers.get("Content-Length", 0))
+            self.rfile.read(length)
+            payload = json.dumps(
+                {
+                    "choices": [{"message": {"content": content}}],
+                    "usage": {"prompt_tokens": 5, "completion_tokens": 5, "cost": 0.0001},
+                }
+            ).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        rows = [_labelled_trace(f"g{i}", "booking", "success") for i in range(8)] + [
+            _labelled_trace(f"f{i}", "booking", "failure") for i in range(8)
+        ]
+        input_path = tmp_path / "labelled.jsonl"
+        _write_jsonl(input_path, rows)
+        out_dir = tmp_path / "out"
+
+        config_path = tmp_path / "claimcheck.toml"
+        config_path.write_text(
+            "[judge]\n"
+            f'base_url = "http://127.0.0.1:{port}/v1"\n'
+            'model = "test/fake-model"\n'
+            "price_in_per_m = 1.0\n"
+            "price_out_per_m = 1.0\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("CLAIMCHECK_API_KEY", "test-key")
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+        monkeypatch.setenv("CLAIMCHECK_LEDGER", str(tmp_path / "ledger.jsonl"))
+
+        result = runner.invoke(
+            app,
+            [
+                "train",
+                str(input_path),
+                "--out",
+                str(out_dir),
+                "--calibrate",
+                "judge",
+                "--config",
+                str(config_path),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+
+        calibration = json.loads((out_dir / "calibration.json").read_text(encoding="utf-8"))
+        assert "judge:test/fake-model" in calibration["calibrators"]
+
+        ledger_lines = (tmp_path / "ledger.jsonl").read_text(encoding="utf-8").strip().splitlines()
+        assert len(ledger_lines) == 16
+    finally:
+        server.shutdown()
 
 
 def test_train_skips_unlabelled_and_no_success_claim_traces(tmp_path: Path) -> None:

@@ -34,6 +34,29 @@ def test_packaged_schema_is_byte_identical_to_repo_schema(wheel: zipfile.ZipFile
     assert packaged == canonical
 
 
+def test_result_schema_is_byte_identical_to_repo_schema(wheel: zipfile.ZipFile) -> None:
+    canonical = (REPO_ROOT / "schemas" / "claimcheck-result-v1.json").read_bytes()
+    packaged = wheel.read("agent_claimcheck/schemas/claimcheck-result-v1.json")
+    assert packaged == canonical
+
+
+def test_builtin_calibrators_are_included_in_the_wheel(wheel: zipfile.ZipFile) -> None:
+    names = set(wheel.namelist())
+    model_path = REPO_ROOT / "src" / "agent_claimcheck" / "models" / "calibrators-v1.json"
+    packaged_path = "agent_claimcheck/models/calibrators-v1.json"
+    assert packaged_path in names
+    assert wheel.read(packaged_path) == model_path.read_bytes()
+
+
+def test_examples_traces_and_probes_are_included_in_the_wheel(wheel: zipfile.ZipFile) -> None:
+    names = set(wheel.namelist())
+    examples_dir = REPO_ROOT / "examples"
+    for filename in ("traces.jsonl", "probes.jsonl"):
+        packaged_path = f"agent_claimcheck/_data/examples/{filename}"
+        assert packaged_path in names
+        assert wheel.read(packaged_path) == (examples_dir / filename).read_bytes()
+
+
 def test_rule_packs_are_included_in_the_wheel(wheel: zipfile.ZipFile) -> None:
     names = set(wheel.namelist())
     packs_dir = REPO_ROOT / "src" / "agent_claimcheck" / "rules" / "packs"

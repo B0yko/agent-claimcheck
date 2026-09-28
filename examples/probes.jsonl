@@ -1,0 +1,1 @@
+{"args":{"event_id":"evt_8841"},"name":"calendar.get_event","ok":true,"output":{"attendees":["james.doyle@example.test"],"end":"2026-04-06T15:30:00+02:00","event_id":"evt_8841","invites_sent":["james.doyle@example.test"],"start":"2026-04-06T15:00:00+02:00","status":"confirmed","timezone":"Europe/Berlin"},"trace_id":"booking-01","ts":"2026-04-01T09:00:04+00:00"}
