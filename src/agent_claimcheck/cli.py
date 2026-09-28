@@ -314,6 +314,158 @@ def check(
     raise typer.Exit(code=1 if fail_on_set & set(counts) else 0)
 
 
+def _run_bench_live(
+    *,
+    judges: str | None,
+    ablation_judge: str | None,
+    ablation_prompt: str,
+    run_name: str | None,
+    max_usd: float | None,
+    concurrency: int,
+    limit: int | None,
+    dry_run: bool,
+    allow_partial: bool,
+    price_in: float | None,
+    price_out: float | None,
+    hardware: str | None,
+    out: str | None,
+) -> str:
+    """Validate `bench --live`'s options, then run the dry-run or the live run.
+
+    Returns the output directory for the caller's shared report-building
+    tail. `--dry-run` prints its plan and exits before returning.
+    """
+    import hashlib
+    import time
+    from datetime import UTC, datetime
+
+    from agent_claimcheck import __version__
+    from agent_claimcheck.bench.live import (
+        BudgetPreflightError,
+        dry_run_plan,
+        format_dry_run,
+        format_spend_summary,
+        run_live,
+    )
+    from agent_claimcheck.config import cache_dir, load_config, resolve_api_key
+    from agent_claimcheck.config import ledger_path as resolve_ledger_path
+    from agent_claimcheck.gate import UnknownPriceError
+    from agent_claimcheck.ledger import Price
+    from agent_claimcheck.resources import path as resource_path
+
+    missing = [
+        name
+        for name, value in (
+            ("--judges", judges),
+            ("--ablation-judge", ablation_judge),
+            ("--run-name", run_name),
+            ("--max-usd", max_usd),
+        )
+        if value is None
+    ]
+    if not dry_run:
+        if out is None:
+            missing.append("--out")
+        if hardware is None:
+            missing.append("--hardware")
+    if missing:
+        error_console.print(f"error: --live requires {', '.join(missing)}")
+        raise typer.Exit(code=2)
+    assert judges is not None
+    assert ablation_judge is not None
+    assert run_name is not None
+    assert max_usd is not None
+
+    judges_list = [j.strip() for j in judges.split(",") if j.strip()]
+    if not judges_list:
+        error_console.print("error: --judges must name at least one model")
+        raise typer.Exit(code=2)
+
+    price_override: Price | None = None
+    if price_in is not None or price_out is not None:
+        if price_in is None or price_out is None:
+            error_console.print("error: --price-in and --price-out must be given together")
+            raise typer.Exit(code=2)
+        price_override = Price(price_in_per_m=price_in, price_out_per_m=price_out)
+
+    cfg = load_config(None)
+    base_url = cfg.judge.base_url
+    api_key = resolve_api_key(base_url)
+
+    train_full = load_traces_report("bench:train").traces
+    test_full = load_traces_report("bench:test").traces
+
+    try:
+        if dry_run:
+            rows, grand_total = dry_run_plan(
+                train_full,
+                test_full,
+                judges=judges_list,
+                ablation_judge=ablation_judge,
+                ablation_prompt=ablation_prompt,
+                limit=limit,
+                base_url=base_url,
+                api_key=api_key,
+                price_override=price_override,
+            )
+            console.print(format_dry_run(rows, grand_total))
+            raise typer.Exit(code=0)
+
+        assert out is not None
+        assert hardware is not None
+        test_bytes = resource_path("bench:test").read_bytes()
+        dataset_sha256 = hashlib.sha256(test_bytes).hexdigest()
+        date = datetime.now(UTC).date().isoformat()
+        command = (
+            f"agent-claimcheck bench --live --judges {judges} "
+            f"--ablation-judge {ablation_judge} --ablation-prompt {ablation_prompt} "
+            f"--run-name {run_name} --max-usd {max_usd} --concurrency {concurrency}"
+            + (f" --limit {limit}" if limit is not None else "")
+            + (" --allow-partial" if allow_partial else "")
+            + f" --out {out}"
+        )
+        start = time.perf_counter()
+        summary = run_live(
+            train_full,
+            test_full,
+            out,
+            judges=judges_list,
+            ablation_judge=ablation_judge,
+            ablation_prompt=ablation_prompt,
+            run_name=run_name,
+            max_usd=max_usd,
+            concurrency=concurrency,
+            limit=limit,
+            allow_partial=allow_partial,
+            base_url=base_url,
+            api_key=api_key,
+            price_override=price_override,
+            timeout_s=cfg.judge.timeout_s,
+            ledger_path=resolve_ledger_path(cfg.ledger),
+            ledger_cap_usd=cfg.ledger_cap_usd,
+            cache_dir=cache_dir(),
+            command=command,
+            date=date,
+            hardware=hardware,
+            package_version=__version__,
+            dataset_sha256=dataset_sha256,
+        )
+    except BudgetPreflightError as exc:
+        error_console.print(f"error: {exc}")
+        raise typer.Exit(code=2) from None
+    except UnknownPriceError as exc:
+        error_console.print(f"error: {exc}")
+        raise typer.Exit(code=2) from None
+
+    console.print(f"live run finished in {time.perf_counter() - start:.1f}s")
+    console.print(format_spend_summary(summary))
+    if summary.budget_exhausted:
+        error_console.print(
+            "warning: budget exhausted mid-run; remaining calls abstained (budget_exhausted)"
+        )
+    return out
+
+
 @app.command()
 def bench(
     offline: bool = typer.Option(
@@ -324,16 +476,65 @@ def bench(
         "--from-recorded",
         help="Recorded directory or alias (e.g. recorded:v0.1.0) to replay.",
     ),
+    live: bool = typer.Option(
+        False, "--live", help="Run live judge benchmarks against a chat-completions API."
+    ),
+    judges: str | None = typer.Option(
+        None, "--judges", help="Comma-separated judge model ids (--live)."
+    ),
+    ablation_judge: str | None = typer.Option(
+        None, "--ablation-judge", help="Model id the prompt ablation runs on (--live)."
+    ),
+    ablation_prompt: str = typer.Option(
+        "claim-by-claim",
+        "--ablation-prompt",
+        help="Prompt name (or path) the ablation judge uses (--live).",
+    ),
+    run_name: str | None = typer.Option(
+        None, "--run-name", help="Run identifier, recorded on every ledger line (--live)."
+    ),
+    max_usd: float | None = typer.Option(
+        None, "--max-usd", help="Budget cap in USD for this run (--live)."
+    ),
+    concurrency: int = typer.Option(
+        8, "--concurrency", help="Threads scoring one judge's calls at a time (--live)."
+    ),
+    limit: int | None = typer.Option(
+        None, "--limit", help="Score only the first N traces per split (--live)."
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Print call counts and worst-case reservations, send nothing (--live).",
+    ),
+    allow_partial: bool = typer.Option(
+        False,
+        "--allow-partial",
+        help="Run even when the dry-run reservation exceeds --max-usd (--live).",
+    ),
+    price_in: float | None = typer.Option(
+        None,
+        "--price-in",
+        help="Override price per million input tokens for every judge (--live).",
+    ),
+    price_out: float | None = typer.Option(
+        None,
+        "--price-out",
+        help="Override price per million output tokens for every judge (--live).",
+    ),
+    hardware: str | None = typer.Option(
+        None, "--hardware", help="Hardware string recorded in run.json (--live)."
+    ),
     out: str | None = typer.Option(
         None,
         "--out",
-        help="Output directory (required with --offline; optional with --from-recorded).",
+        help="Output directory (required with --offline/--live; optional with --from-recorded).",
     ),
     check_readme: str | None = typer.Option(
         None, "--check-readme", help="README to check the bench:start/bench:end block against."
     ),
 ) -> None:
-    """Run or replay the offline benchmark and render the README numbers."""
+    """Run or replay the benchmark and render the README numbers."""
     import hashlib
     import time
     from datetime import UTC, datetime
@@ -349,8 +550,11 @@ def bench(
     from agent_claimcheck.bench.runner import run_offline
     from agent_claimcheck.resources import path as resource_path
 
-    if offline == (from_recorded is not None):
-        error_console.print("error: pass exactly one of --offline or --from-recorded")
+    if sum((offline, from_recorded is not None, live)) != 1:
+        error_console.print("error: pass exactly one of --offline, --from-recorded or --live")
+        raise typer.Exit(code=2)
+    if dry_run and not live:
+        error_console.print("error: --dry-run requires --live")
         raise typer.Exit(code=2)
 
     if offline:
@@ -376,6 +580,22 @@ def bench(
             f"({time.perf_counter() - start:.1f}s)"
         )
         recorded_dir = out
+    elif live:
+        recorded_dir = _run_bench_live(
+            judges=judges,
+            ablation_judge=ablation_judge,
+            ablation_prompt=ablation_prompt,
+            run_name=run_name,
+            max_usd=max_usd,
+            concurrency=concurrency,
+            limit=limit,
+            dry_run=dry_run,
+            allow_partial=allow_partial,
+            price_in=price_in,
+            price_out=price_out,
+            hardware=hardware,
+            out=out,
+        )
     else:
         assert from_recorded is not None
         recorded_dir = from_recorded
