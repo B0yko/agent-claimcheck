@@ -502,3 +502,12 @@ def test_judge_findings_numbers_appear_in_bench_md(
     before_findings = bench_md.split("### Findings")[0]
     for number in numbers_in(findings):
         assert number in before_findings
+
+
+def test_leakage_constant_matches_the_dataset_card() -> None:
+    from agent_claimcheck.bench.report import LEAKAGE_TEST_AUROC
+
+    card = (Path(__file__).resolve().parents[1] / "benchmark" / "v1" / "DATASET_CARD.md").read_text(
+        encoding="utf-8"
+    )
+    assert f"{LEAKAGE_TEST_AUROC:.3f} AUROC** on test" in card
