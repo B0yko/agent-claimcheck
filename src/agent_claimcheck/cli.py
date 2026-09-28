@@ -275,7 +275,12 @@ def check(
         error_console.print(f"error: {exc}")
         raise typer.Exit(code=2) from None
 
-    if checker.calibrators_builtin and input_file not in ("bench:train", "bench:test"):
+    calibrators_applied = any(r.calibrated for r in results)
+    if (
+        checker.calibrators_builtin
+        and calibrators_applied
+        and input_file not in ("bench:train", "bench:test")
+    ):
         error_console.print(
             "Note: built-in calibrators were fitted on the synthetic benchmark; "
             "fit your own with `agent-claimcheck train`."

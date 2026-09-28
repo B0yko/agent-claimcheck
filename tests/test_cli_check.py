@@ -160,6 +160,20 @@ def test_no_note_when_bench_train_is_the_input() -> None:
     assert "built-in calibrators were fitted" not in result.stderr
 
 
+@pytest.mark.parametrize("detector", ["trust-agent", "any-error"])
+def test_no_note_when_no_builtin_calibrator_matches_the_detector(detector: str) -> None:
+    # The built-in calibrator set only has `rules` and `classifier-lr` keys,
+    # so baseline detectors never get calibrated even though
+    # `checker.calibrators_builtin` is true: the note would be misleading
+    # here.
+    result = runner.invoke(
+        app, ["check", "example:mixed", "--detector", detector, "--format", "jsonl"]
+    )
+    rows = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
+    assert rows and not any(row["calibrated"] for row in rows)
+    assert "built-in calibrators were fitted" not in result.stderr
+
+
 def test_calibration_flag_overrides_the_builtin_set(tmp_path: Path) -> None:
     calibration_path = tmp_path / "calibration.json"
     calibration_path.write_text(
@@ -323,6 +337,11 @@ def test_check_detector_judge_against_local_fake_server(
         assert len(rows) == 2
         assert all(r["verdict"] == "verified" for r in rows)
         assert all(r["p_success_raw"] == pytest.approx(0.9) for r in rows)
+        # The built-in calibrator set has no `judge` key, so nothing here
+        # was actually calibrated and the built-in-calibrators note must
+        # not print.
+        assert all(not r["calibrated"] for r in rows)
+        assert "built-in calibrators were fitted" not in result.stderr
 
         ledger_lines = ledger_path.read_text(encoding="utf-8").strip().splitlines()
         assert len(ledger_lines) == 2
