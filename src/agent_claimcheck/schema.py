@@ -376,6 +376,10 @@ def load_traces(
 def dump_trace(trace: Trace) -> str:
     """Serialize a trace to one canonical JSON line, validating it first."""
     obj = trace.model_dump(mode="json", exclude_none=False)
+    # Optional top-level objects are omitted rather than written as null.
+    for key in ("ground_truth", "meta"):
+        if obj.get(key) is None:
+            obj.pop(key, None)
     validator = _trace_validator()
     schema_errors = list(validator.iter_errors(obj))
     if schema_errors:

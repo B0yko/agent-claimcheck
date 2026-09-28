@@ -12,10 +12,8 @@
     "task": { "$ref": "#/$defs/task" },
     "steps": { "type": "array", "items": { "$ref": "#/$defs/step" } },
     "final_claim": { "$ref": "#/$defs/finalClaim" },
-    "ground_truth": {
-      "anyOf": [{ "$ref": "#/$defs/groundTruth" }, { "type": "null" }]
-    },
-    "meta": { "type": ["object", "null"] }
+    "ground_truth": { "$ref": "#/$defs/groundTruth" },
+    "meta": { "type": "object" }
   },
   "$defs": {
     "task": {
