@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/B0yko/agent-claimcheck/blob/main/schemas/claimcheck-result-v1.json",
+  "title": "claimcheck-result/v1",
+  "type": "object",
+  "required": [
+    "schema",
+    "trace_id",
+    "domain",
+    "detector",
+    "verdict",
+    "p_success",
+    "p_success_raw",
+    "calibrated",
+    "abstain",
+    "abstain_reason",
+    "confidence",
+    "reasons",
+    "claims",
+    "detectors",
+    "cost_usd",
+    "latency_ms",
+    "cached"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "claimcheck-result/v1" },
+    "trace_id": { "type": "string", "minLength": 1 },
+    "domain": { "enum": ["booking", "crm", "coding", "browser", "other"] },
+    "detector": { "type": "string", "minLength": 1 },
+    "verdict": { "enum": ["verified", "false_success", "unverifiable", "skipped"] },
+    "p_success": { "type": ["number", "null"] },
+    "p_success_raw": { "type": ["number", "null"] },
+    "calibrated": { "type": "boolean" },
+    "abstain": { "type": "boolean" },
+    "abstain_reason": { "type": ["string", "null"] },
+    "confidence": { "type": ["number", "null"] },
+    "reasons": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/reason" }
+    },
+    "claims": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/resolvedClaim" }
+    },
+    "detectors": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/detectorOutput" }
+    },
+    "cost_usd": { "type": "number" },
+    "latency_ms": { "type": "number" },
+    "cached": { "type": "boolean" }
+  },
+  "$defs": {
+    "reason": {
+      "type": "object",
+      "required": ["claim", "outcome", "step", "detail"],
+      "additionalProperties": false,
+      "properties": {
+        "claim": { "type": ["string", "null"] },
+        "outcome": { "type": "string" },
+        "step": { "type": ["integer", "null"] },
+        "detail": { "type": "string", "maxLength": 200 }
+      }
+    },
+    "resolvedClaim": {
+      "type": "object",
+      "required": ["type", "subject", "source", "span"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string" },
+        "subject": { "type": "object" },
+        "source": { "enum": ["structured", "extracted"] },
+        "span": {
+          "anyOf": [
+            { "type": "null" },
+            {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": { "type": "integer" }
+            }
+          ]
+        }
+      }
+    },
+    "detectorOutput": {
+      "type": "object",
+      "required": [
+        "detector",
+        "p_success",
+        "abstain",
+        "abstain_reason",
+        "p_calibrated",
+        "reasons",
+        "cost_usd",
+        "latency_ms",
+        "cached",
+        "components",
+        "details"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "detector": { "type": "string", "minLength": 1 },
+        "p_success": { "type": "number" },
+        "abstain": { "type": "boolean" },
+        "abstain_reason": { "type": ["string", "null"] },
+        "p_calibrated": { "type": ["number", "null"] },
+        "reasons": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/reason" }
+        },
+        "cost_usd": { "type": "number" },
+        "latency_ms": { "type": "number" },
+        "cached": { "type": "boolean" },
+        "components": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/detectorOutput" }
+        },
+        "details": { "type": "object" }
+      }
+    }
+  }
+}

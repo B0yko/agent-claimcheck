@@ -1,0 +1,27 @@
+{
+  "base_rate": 0.6,
+  "calibrators": {
+    "classifier-lr": {
+      "a": 0.7645566594915274,
+      "b": -0.03800312262447237,
+      "clip": 1e-06,
+      "detector": "classifier-lr",
+      "fitted_on": "bench:train",
+      "method": "platt",
+      "n": 180,
+      "n_pos": 108
+    },
+    "rules": {
+      "a": 0.8031373186446822,
+      "b": -0.14878284439448436,
+      "clip": 1e-06,
+      "detector": "rules",
+      "fitted_on": "bench:train",
+      "method": "platt",
+      "n": 180,
+      "n_pos": 108
+    }
+  },
+  "fitted_on": "bench:train",
+  "version": 1
+}

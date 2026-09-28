@@ -281,6 +281,18 @@ def pair_results(steps: list[Step]) -> dict[int, int | None]:
     return pairing
 
 
+def merge_probes(traces: list[Trace], probes_path: str | Path) -> tuple[list[Trace], list[str]]:
+    """Merge `probes_path`'s lines into the matching traces (by `trace_id`).
+
+    Each probe becomes an appended `state_probe` step, `role: environment`,
+    `i` continuing after the trace's last step, in file order. A probe for
+    an unknown `trace_id` is skipped and reported as a warning, not an
+    error. Public so callers other than `load_traces_report` (the `Checker`)
+    can merge probes into traces they already hold.
+    """
+    return _merge_probes(traces, Path(probes_path))
+
+
 def _merge_probes(traces: list[Trace], probes_path: Path) -> tuple[list[Trace], list[str]]:
     by_id = {t.trace_id: t for t in traces}
     order = [t.trace_id for t in traces]
