@@ -632,6 +632,42 @@ def bench(
             raise typer.Exit(code=1)
 
 
+@app.command()
+def serve(
+    inputs: list[str] = typer.Argument(  # noqa: B008 - typer's documented variadic-argument idiom
+        ..., metavar="INPUT", help="Trace file(s) (JSON Lines) path or packaged alias."
+    ),
+    results: str | None = typer.Option(
+        None, "--results", help="Precomputed claimcheck-result/v1 JSON Lines file."
+    ),
+    reviews: str = typer.Option(
+        "claimcheck-reviews.jsonl", "--reviews", help="Reviews JSON Lines file to append to."
+    ),
+    host: str = typer.Option("127.0.0.1", "--host", help="Bind host."),
+    port: int = typer.Option(8765, "--port", help="Bind port."),
+    max_usd: float = typer.Option(1.0, "--max-usd", help="Live judge budget cap in USD."),
+    config: str | None = typer.Option(None, "--config", help="claimcheck.toml path."),
+) -> None:
+    """Serve the review dashboard over the named trace inputs."""
+    from agent_claimcheck.server.app import serve as serve_dashboard
+
+    try:
+        serve_dashboard(
+            inputs,
+            results=results,
+            reviews=Path(reviews),
+            host=host,
+            port=port,
+            max_usd=max_usd,
+            config=config,
+        )
+    except (OSError, ValueError, ResourceNotFoundError) as exc:
+        error_console.print(f"error: {exc}")
+        raise typer.Exit(code=2) from None
+    except KeyboardInterrupt:
+        raise typer.Exit(code=0) from None
+
+
 @dataset_app.command("generate")
 def dataset_generate(
     seed: int = typer.Option(20260924, "--seed", help="Seed for the deterministic generator."),
