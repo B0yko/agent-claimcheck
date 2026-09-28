@@ -711,12 +711,14 @@ def bench(
         )
         (write_dir / "histogram.svg").write_text(histogram_svg_for(recorded_dir), encoding="utf-8")
 
-    console.print(bench_md)
+    # Verbatim: no rich markup (it would eat `[alt]` in an image link) and no
+    # wrapping at the terminal width, so the printed tables are the README block.
+    typer.echo(bench_md, nl=False)
 
     if check_readme is not None:
         diff = check_readme_diff(check_readme, bench_md)
         if diff is not None:
-            console.print(diff)
+            typer.echo(diff)
             raise typer.Exit(code=1)
 
 

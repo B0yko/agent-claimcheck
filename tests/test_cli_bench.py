@@ -39,6 +39,26 @@ def test_offline_end_to_end(tmp_path: Path) -> None:
     assert bench_json["dataset"]["n_total"] == 300
     assert "rules" in bench_json["detectors"]
     assert "### Table A" in result.output
+    # After the one status line, stdout is bench.md byte for byte.
+    assert result.stdout.endswith((out / "bench.md").read_text(encoding="utf-8"))
+
+
+def test_from_recorded_prints_bench_md_verbatim(offline_recorded_dir: Path, tmp_path: Path) -> None:
+    out = tmp_path / "replay"
+    with_out = runner.invoke(
+        app, ["bench", "--from-recorded", str(offline_recorded_dir), "--out", str(out)]
+    )
+    assert with_out.exit_code == 0, with_out.output
+    bench_md = (out / "bench.md").read_text(encoding="utf-8")
+
+    assert with_out.stdout == bench_md
+    # Neither of the things a rich console would do to it:
+    assert max(len(line) for line in bench_md.splitlines()) > 80  # wrap at the terminal width
+    assert "![reliability](" in with_out.stdout  # read `[reliability]` as a markup tag
+
+    without_out = runner.invoke(app, ["bench", "--from-recorded", str(offline_recorded_dir)])
+    assert without_out.exit_code == 0
+    assert without_out.stdout == bench_md
 
 
 def test_from_recorded_reproduces_the_offline_run(
