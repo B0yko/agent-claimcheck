@@ -21,8 +21,10 @@ from typing import Any
 import httpx
 import pytest
 from factory import message, trace
+from typer.testing import CliRunner
 
-from agent_claimcheck.config import Config, JudgeConfig
+from agent_claimcheck.cli import app
+from agent_claimcheck.config import BudgetConfig, Config, JudgeConfig
 from agent_claimcheck.detectors.judge import JudgeDetector
 from agent_claimcheck.server import app as server_app
 from agent_claimcheck.server.app import DashboardServer, create_server
@@ -564,3 +566,61 @@ def test_judge_run_with_a_tiny_budget_abstains_budget_exhausted_over_sse(
     assert all(p["verdict"] == "unverifiable" for p in payloads)
     assert "Traceback" not in body
     assert "Exception" not in body
+
+
+# ------------------------------------------------------------ --max-usd default --
+
+
+@pytest.fixture
+def captured_budget(monkeypatch: pytest.MonkeyPatch) -> list[float]:
+    """Record the budget `create_server` hands the judge context."""
+    captured: list[float] = []
+
+    def fake_build(cfg: Config, max_usd: float) -> tuple[None, bool]:
+        captured.append(max_usd)
+        return None, False
+
+    monkeypatch.setattr(server_app, "_build_judge_context", fake_build)
+    return captured
+
+
+def _build_and_close(**kwargs: Any) -> None:
+    create_server([], port=0, **kwargs).server_close()
+
+
+def test_serve_budget_is_the_argument_when_given(captured_budget: list[float]) -> None:
+    _build_and_close(max_usd=3.0, config=Config(budget=BudgetConfig(max_usd=0.25)))
+    assert captured_budget == [3.0]
+
+
+def test_serve_budget_falls_back_to_the_config(captured_budget: list[float]) -> None:
+    _build_and_close(config=Config(budget=BudgetConfig(max_usd=0.25)))
+    assert captured_budget == [0.25]
+
+
+def test_serve_budget_precedence_flag_env_toml_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, captured_budget: list[float]
+) -> None:
+    toml = tmp_path / "claimcheck.toml"
+    toml.write_text("[budget]\nmax_usd = 0.4\n", encoding="utf-8")
+    empty = tmp_path / "empty.toml"
+    empty.write_text("", encoding="utf-8")
+
+    _build_and_close(config=str(empty))  # no env, no file setting: 1.0
+    _build_and_close(config=str(toml))  # the file
+    monkeypatch.setenv("CLAIMCHECK_MAX_USD", "0.6")
+    _build_and_close(config=str(toml))  # the environment beats the file
+    _build_and_close(config=str(toml), max_usd=2.0)  # the argument beats both
+    assert captured_budget == [1.0, 0.4, 0.6, 2.0]
+
+
+def test_serve_command_passes_no_budget_unless_the_flag_is_given(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, Any]] = []
+    monkeypatch.setattr(server_app, "serve", lambda inputs, **kwargs: calls.append(kwargs))
+
+    runner = CliRunner()
+    assert runner.invoke(app, ["serve", "example:mixed"]).exit_code == 0
+    assert runner.invoke(app, ["serve", "example:mixed", "--max-usd", "2.5"]).exit_code == 0
+    assert [c["max_usd"] for c in calls] == [None, 2.5]

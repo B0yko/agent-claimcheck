@@ -733,7 +733,12 @@ def serve(
     ),
     host: str = typer.Option("127.0.0.1", "--host", help="Bind host."),
     port: int = typer.Option(8765, "--port", help="Bind port."),
-    max_usd: float = typer.Option(1.0, "--max-usd", help="Live judge budget cap in USD."),
+    max_usd: float | None = typer.Option(
+        None,
+        "--max-usd",
+        help="Live judge budget cap in USD (default: CLAIMCHECK_MAX_USD, then the config's "
+        "[budget] max_usd, then 1.0).",
+    ),
     config: str | None = typer.Option(None, "--config", help="claimcheck.toml path."),
 ) -> None:
     """Serve the review dashboard over the named trace inputs."""

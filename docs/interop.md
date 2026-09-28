@@ -100,13 +100,16 @@ on the first invalid line, before scoring anything.
 ## Human review as agent-trace/v1
 
 The local dashboard, `agent-claimcheck serve [INPUT ...] [--results F]
-[--reviews F] [--host 127.0.0.1] [--port 8765] [--max-usd 1.0]`, is one
+[--reviews F] [--host 127.0.0.1] [--port 8765] [--max-usd USD]`, is one
 producer and one consumer of this same format. Its review queue lets a
 person resolve an `unverifiable` trace to Verified or False success; each
 decision is appended to the reviews file (default `./claimcheck-reviews.jsonl`)
 as a full `agent-trace/v1` line with `ground_truth.checked_by: "human"`. That
 file needs no conversion to feed `agent-claimcheck train`: reviewed traces
 are labelled agent-trace/v1 like any other.
+
+The dashboard's live judge budget follows the order `check` uses: `--max-usd`,
+then `CLAIMCHECK_MAX_USD`, then `[budget] max_usd` in the config, then 1.0 USD.
 
 ## Bring your own tool names
 

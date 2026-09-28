@@ -62,7 +62,7 @@ agent-claimcheck check example:browser
 ## Trying the dashboard on this data
 
 `agent-claimcheck serve [INPUT ...] [--results F] [--reviews F] [--host
-127.0.0.1] [--port 8765] [--max-usd 1.0]` starts a local, localhost-only
+127.0.0.1] [--port 8765] [--max-usd USD]` starts a local, localhost-only
 review dashboard against any of the inputs above (or the packaged benchmark
 splits):
 

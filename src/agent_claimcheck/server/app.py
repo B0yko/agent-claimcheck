@@ -272,11 +272,18 @@ def create_server(
     reviews: str | Path = Path("claimcheck-reviews.jsonl"),
     host: str = "127.0.0.1",
     port: int = 8765,
-    max_usd: float = 1.0,
+    max_usd: float | None = None,
     config: str | Path | Config | None = None,
 ) -> DashboardServer:
-    """Build (without starting) the dashboard's HTTP server."""
+    """Build (without starting) the dashboard's HTTP server.
+
+    The live judge budget is `max_usd` when given, else the config's
+    (`CLAIMCHECK_MAX_USD`, then `[budget] max_usd`, then 1.0 USD), the same
+    order `check` uses.
+    """
     cfg = config if isinstance(config, Config) else load_config(config)
+    if max_usd is None:
+        max_usd = cfg.budget.max_usd
 
     traces: list[Trace] = []
     for one_input in inputs:
@@ -335,7 +342,7 @@ def serve(
     reviews: str | Path = Path("claimcheck-reviews.jsonl"),
     host: str = "127.0.0.1",
     port: int = 8765,
-    max_usd: float = 1.0,
+    max_usd: float | None = None,
     config: str | Path | None = None,
 ) -> None:
     """Build and run the dashboard's HTTP server (blocks until stopped)."""
