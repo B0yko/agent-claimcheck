@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>agent-claimcheck</title>
+<link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <h1>agent-claimcheck</h1>
+  <p id="input-summary" class="input-summary">Loading...</p>
+</header>
+
+<main>
+  <section id="overview" class="panel" aria-labelledby="overview-heading">
+    <h2 id="overview-heading">Overview</h2>
+    <table id="overview-table">
+      <thead>
+        <tr id="overview-head-row"><th scope="col">Verdict</th></tr>
+      </thead>
+      <tbody id="overview-body"></tbody>
+    </table>
+  </section>
+
+  <section id="queue" class="panel" aria-labelledby="queue-heading">
+    <h2 id="queue-heading">Review queue</h2>
+    <ul id="queue-list" class="queue-list"></ul>
+    <p id="queue-empty" class="empty-note" hidden>Nothing waiting for review.</p>
+  </section>
+
+  <section id="inspector" class="panel" aria-labelledby="inspector-heading">
+    <h2 id="inspector-heading">Inspector</h2>
+    <p id="inspector-empty" class="empty-note">Select a trace from the review queue.</p>
+
+    <div id="inspector-content" hidden>
+      <h3 id="inspector-trace-id"></h3>
+      <p><strong>Instruction:</strong> <span id="inspector-instruction"></span></p>
+      <p><strong>Verdict:</strong> <span id="inspector-verdict"></span>
+         (<span id="inspector-p"></span>)</p>
+
+      <h4>Reasons</h4>
+      <ul id="reasons-list" class="reasons-list"></ul>
+
+      <h4>Claims</h4>
+      <ul id="claims-list" class="claims-list"></ul>
+
+      <h4>Step timeline</h4>
+      <ol id="steps-list" class="steps-list"></ol>
+
+      <h4>Rule evidence</h4>
+      <ul id="rule-evidence-list" class="rule-evidence-list"></ul>
+
+      <h4>Judge</h4>
+      <div id="judge-output"></div>
+
+      <h4>Classifier contributions</h4>
+      <ul id="contributions-list" class="contributions-list"></ul>
+    </div>
+  </section>
+
+  <section id="decision" class="panel" aria-labelledby="decision-heading">
+    <h2 id="decision-heading">Decision</h2>
+    <div class="decision-buttons">
+      <button id="decision-verified-btn" type="button" class="btn btn-verified">Verified</button>
+      <button id="decision-false-btn" type="button" class="btn btn-false">False success</button>
+    </div>
+    <label for="decision-note">Note</label>
+    <textarea id="decision-note" maxlength="1000" rows="4"></textarea>
+    <p id="note-counter" class="note-counter">1000 characters left</p>
+    <button id="decision-save-btn" type="button" class="btn" disabled>Save review</button>
+    <p id="decision-status" class="status-note" role="status"></p>
+    <a id="download-reviews-btn" class="btn btn-secondary" href="/api/reviews" download="claimcheck-reviews.jsonl">Download reviews</a>
+  </section>
+
+  <section id="judge" class="panel" aria-labelledby="judge-heading">
+    <h2 id="judge-heading">Judge</h2>
+    <p id="judge-estimate">Queued: <span id="judge-queued">-</span> &middot; worst case: <span id="judge-worst-case">-</span></p>
+    <button id="judge-run-btn" type="button" class="btn">Run judge on queue</button>
+    <p id="judge-disabled-reason" class="status-note" hidden></p>
+    <progress id="judge-progress" value="0" max="1" hidden></progress>
+    <p id="judge-cost" class="status-note"></p>
+    <button id="judge-cancel-btn" type="button" class="btn btn-secondary" hidden>Cancel</button>
+    <p id="judge-status" class="status-note" role="status"></p>
+  </section>
+</main>
+
+<template id="overview-row-template">
+  <tr class="overview-row">
+    <th scope="row" class="overview-verdict"></th>
+  </tr>
+</template>
+
+<template id="queue-row-template">
+  <li class="queue-row">
+    <button type="button" class="queue-row-button">
+      <span class="queue-trace-id"></span>
+      <span class="queue-domain"></span>
+      <span class="queue-p"></span>
+      <span class="queue-reason"></span>
+    </button>
+  </li>
+</template>
+
+<template id="claim-template">
+  <li class="claim-row">
+    <span class="claim-type"></span>
+    <span class="claim-source"></span>
+    <pre class="claim-subject"></pre>
+  </li>
+</template>
+
+<template id="step-template">
+  <li class="step-row">
+    <span class="step-index"></span>
+    <span class="step-kind"></span>
+    <span class="step-role"></span>
+    <span class="step-name"></span>
+    <pre class="step-args"></pre>
+    <span class="step-ok"></span>
+    <pre class="step-output"></pre>
+    <pre class="step-error"></pre>
+    <p class="step-content"></p>
+  </li>
+</template>
+
+<template id="reason-template">
+  <li class="reason-row">
+    <a class="reason-step-link" href="#">
+      <span class="reason-claim"></span>
+      <span class="reason-outcome"></span>
+      <span class="reason-detail"></span>
+    </a>
+  </li>
+</template>
+
+<template id="rule-evidence-template">
+  <li class="rule-evidence-row">
+    <a class="rule-evidence-step-link" href="#">
+      <span class="rule-evidence-claim"></span>
+      <span class="rule-evidence-outcome"></span>
+    </a>
+    <span class="rule-evidence-detail"></span>
+    <ul class="rule-evidence-checks"></ul>
+  </li>
+</template>
+
+<template id="check-template">
+  <li class="check-row">
+    <span class="check-path"></span>
+    <span class="check-op"></span>
+    <span class="check-result"></span>
+  </li>
+</template>
+
+<template id="evidence-step-link-template">
+  <a class="evidence-step-link" href="#"></a>
+</template>
+
+<template id="contribution-template">
+  <li class="contribution-row">
+    <span class="contribution-feature"></span>
+    <span class="contribution-bar-track"><span class="contribution-bar"></span></span>
+    <span class="contribution-value"></span>
+  </li>
+</template>
+
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>

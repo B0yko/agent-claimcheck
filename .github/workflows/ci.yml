@@ -47,3 +47,13 @@ jobs:
           for f in bench.md bench.json reliability.svg histogram.svg; do
             cmp "results/v0.1.0/$f" "/tmp/recorded-regen/$f"
           done
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: for f in src/agent_claimcheck/server/static/*.js; do node --check "$f"; done
+      - run: node --test tests/js/*.test.mjs
