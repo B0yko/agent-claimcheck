@@ -18,7 +18,8 @@
   <a href="#how-it-works">How it works</a> ·
   <a href="#results">Results</a> ·
   <a href="#use-it-on-your-own-traces">Your traces</a> ·
-  <a href="docs/">Docs</a>
+  <a href="docs/">Docs</a> ·
+  <a href="https://huggingface.co/datasets/me2pyy/claimcheck-bench">Dataset on Hugging Face</a>
 </p>
 
 An agent's final message is a claim, not evidence. **agent-claimcheck** reads agent traces, checks every success claim against what the tools and the environment actually returned, and returns `verified`, `false_success` or `unverifiable` with a calibrated probability (traces with no success claim are `skipped`). Whatever cannot be checked goes to a human review queue instead of being guessed.
