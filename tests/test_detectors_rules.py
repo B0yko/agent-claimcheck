@@ -111,7 +111,7 @@ def test_example_browser_rules_abstain_for_every_trace_with_a_success_claim() ->
     assert checked > 0
 
 
-# --- reviewer findings: crm.yaml stage_changed unanchored bare word -----
+# --- crm.yaml stage_changed ignores "stage" used as an ordinary word ---
 
 
 def test_bare_stage_word_does_not_spuriously_downgrade_a_real_update() -> None:

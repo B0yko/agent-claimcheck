@@ -380,7 +380,7 @@ def test_retry_after_a_failed_call_reaches_probe_supported() -> None:
     assert outcome.step == 4
 
 
-# --- reviewer findings: pack rules missing subject-vs-evidence checks ---
+# --- pack rules check the subject as well as the evidence ---
 
 
 def test_booking_booked_rule_catches_wrong_attendee() -> None:
@@ -471,7 +471,7 @@ def test_coding_tests_passed_rule_catches_a_narrower_suite() -> None:
     assert outcome.outcome != "probe_supported"
 
 
-# --- reviewer finding: empty check list vacuously "all skipped" --------
+# --- a rule with no checks is not vacuously "all skipped" --------
 
 
 def test_probe_supported_when_rule_declares_zero_checks() -> None:
