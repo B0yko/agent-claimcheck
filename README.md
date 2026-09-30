@@ -536,3 +536,5 @@ The benchmark (`benchmark/v1/`) is fully synthetic, produced by the in-repo gene
 [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md) · [Docs](docs/)
 
 <p align="center"><sub>Apache-2.0 · Copyright 2026 Andrii Boiko</sub></p>
+
+Built by [Andrii Boiko](https://boiko.ai/) · [Project overview](https://boiko.ai/work/agent-claimcheck/).
