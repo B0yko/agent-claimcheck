@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using this metadata."
+type: software
+title: "agent-claimcheck"
+authors:
+  - family-names: "Boiko"
+    given-names: "Andrii"
+    website: "https://boiko.ai/"
+repository-code: "https://github.com/B0yko/agent-claimcheck"
+url: "https://github.com/B0yko/agent-claimcheck"
+license: Apache-2.0
