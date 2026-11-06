@@ -1,8 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/img/banner-dark.svg">
-    <img alt="agent-claimcheck: catch AI agents that say done when the task isn't" src="docs/img/banner-light.svg" width="100%">
-  </picture>
+  <img src="docs/img/social-preview.png" alt="agent-claimcheck: the agent said “done.” It wasn’t." width="880">
 </p>
 
 <p align="center">
