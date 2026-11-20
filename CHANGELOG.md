@@ -6,9 +6,18 @@ All notable changes to this project are documented in this file.
 
 ### Changed
 
+- README figures switch with GitHub's own theme toggle (`#gh-light/dark-mode-only` wrappers) instead of the OS color scheme; the packaged PyPI readme keeps the light variant only.
 - Redesigned reliability and histogram charts: axis ticks and titles, a legend that never overlaps, marker area by bin size, short panel titles.
 - `check` colors verdicts in the table and the summary line, and reason details read as plain sentences in the table and the dashboard.
 - README: a light and dark banner, badges, a results summary with the full recorded tables collapsed, and dark-mode screenshots.
+
+### Fixed
+
+- Locked `certifi` bumped to 2026.10.23 (PYSEC-2026-4320).
+
+### Added
+
+- Packaging tests: the PyPI readme's tag pins must match the project version, and the packaged readme carries only the light figures; CONTRIBUTING documents the release steps.
 
 ## [0.1.1] - 2026-09-28
 
