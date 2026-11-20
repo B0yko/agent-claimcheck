@@ -89,6 +89,19 @@ hyperparameters was made by looking at test-split results, that result is
 no longer honest; regenerate the evaluation from the train split's own
 signal instead.
 
+## Releasing
+
+1. Bump `version` in `pyproject.toml` and move the `[Unreleased]` changelog
+   entries under the new version and date.
+2. Update the tag pins in the `[tool.hatch.metadata.hooks.fancy-pypi-readme]`
+   substitutions to the new tag (for example `v0.1.2`). The packaged README
+   resolves its relative links and images against that tag, so a pin left at
+   an older tag 404s every asset added since it; `tests/test_packaging.py`
+   fails when the pins and the version disagree.
+3. Tag the release commit (`git tag v0.1.2 && git push origin v0.1.2`) and
+   run the "Publish to PyPI" workflow manually against that tag. It refuses
+   any ref that is not a `v*` tag.
+
 ## Commit style
 
 Conventional commit messages (`feat:`, `fix:`, `docs:`, `test:`, `ci:`,

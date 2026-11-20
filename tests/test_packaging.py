@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
+import tomllib
 import zipfile
 from collections.abc import Iterator
 from pathlib import Path
@@ -99,3 +101,31 @@ def test_recorded_run_is_included_in_the_wheel(wheel: zipfile.ZipFile) -> None:
         packaged_path = f"agent_claimcheck/_data/results/v0.1.0/{path.name}"
         assert packaged_path in names
         assert wheel.read(packaged_path) == path.read_bytes()
+
+
+def test_pypi_readme_tag_pins_match_the_project_version() -> None:
+    """The packaged README resolves assets against a tag; a stale pin 404s them."""
+    pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    version = pyproject["project"]["version"]
+    hook = pyproject["tool"]["hatch"]["metadata"]["hooks"]["fancy-pypi-readme"]
+    pins = [
+        pin
+        for sub in hook["substitutions"]
+        for pin in re.findall(r"agent-claimcheck/v([^/]+)/", sub["replacement"])
+    ]
+    assert pins, "expected tag-pinned substitutions in the fancy-pypi-readme hook"
+    assert set(pins) == {version}, f"tag pins {sorted(set(pins))} do not match version {version}"
+
+
+def test_pypi_readme_keeps_only_the_light_figures(wheel: zipfile.ZipFile) -> None:
+    """GitHub's #gh-*-mode-only theme switch means nothing on PyPI: keep one figure."""
+    metadata = next(n for n in wheel.namelist() if n.endswith(".dist-info/METADATA"))
+    readme = wheel.read(metadata).decode("utf-8")
+    assert "#gh-dark-mode-only" not in readme
+    assert "#gh-light-mode-only" not in readme
+    assert "<picture>" not in readme
+    assert "https://raw.githubusercontent.com/B0yko/agent-claimcheck/v" in readme
+    for figure in ("docs/img/dashboard.png", "docs/img/pipeline-light.svg"):
+        assert figure in readme
+    assert "dashboard-dark.png" not in readme
+    assert "pipeline-dark.svg" not in readme

@@ -26,10 +26,8 @@ An agent's final message is a claim, not evidence. **agent-claimcheck** reads ag
 - **One gate for everyone.** A single pure function turns any detector's probability into a verdict: `verified` from 0.80 up, `false_success` from 0.20 down, `unverifiable` in between.
 - **Measured, not asserted.** A 300-trace labelled benchmark and a recorded nine-detector comparison, reproducible offline, with AUROC intervals, calibration, coverage, misses and cost per detector.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/img/dashboard-dark.png">
-  <img alt="The review dashboard: queue on the left, inspector with rule evidence, classifier contributions and the step timeline on the right" src="docs/img/dashboard.png">
-</picture>
+<a href="docs/img/dashboard.png#gh-light-mode-only"><img alt="The review dashboard: queue on the left, inspector with rule evidence, classifier contributions and the step timeline on the right" src="docs/img/dashboard.png"></a>
+<a href="docs/img/dashboard-dark.png#gh-dark-mode-only"><img alt="The review dashboard: queue on the left, inspector with rule evidence, classifier contributions and the step timeline on the right" src="docs/img/dashboard-dark.png"></a>
 
 ## Quickstart
 
@@ -59,10 +57,8 @@ uvx agent-claimcheck serve bench:test                        # dashboard on 127.
 
 ## How it works
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/img/pipeline-dark.svg">
-  <img alt="Pipeline: load and redact traces; score them with rules, a classifier and an LLM judge; calibrate and gate them into verified, false_success or unverifiable; review what is left and retrain" src="docs/img/pipeline-light.svg" width="100%">
-</picture>
+<a href="docs/img/pipeline-light.svg#gh-light-mode-only"><img alt="Pipeline: load and redact traces; score them with rules, a classifier and an LLM judge; calibrate and gate them into verified, false_success or unverifiable; review what is left and retrain" src="docs/img/pipeline-light.svg" width="100%"></a>
+<a href="docs/img/pipeline-dark.svg#gh-dark-mode-only"><img alt="Pipeline: load and redact traces; score them with rules, a classifier and an LLM judge; calibrate and gate them into verified, false_success or unverifiable; review what is left and retrain" src="docs/img/pipeline-dark.svg" width="100%"></a>
 
 <details>
 <summary>The same pipeline as a Mermaid diagram</summary>

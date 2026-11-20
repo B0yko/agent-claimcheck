@@ -53,6 +53,16 @@ content-type = "text/markdown"
 [[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
 path = "README.md"
 
+# GitHub switches figures by its own theme via #gh-*-mode-only anchor fragments;
+# PyPI has no such mechanism, so keep only the light figure there, unwrapped.
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = '<a href="[^"]*#gh-dark-mode-only">.*?</a>\n?'
+replacement = ''
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = '<a href="[^"]*#gh-light-mode-only">(<img[^>]*>)</a>'
+replacement = '\1'
+
 [[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
 pattern = '!\[([^\]]*)\]\((?!https?://)([^)]+)\)'
 replacement = '![\1](https://raw.githubusercontent.com/B0yko/agent-claimcheck/v0.1.1/\2)'
