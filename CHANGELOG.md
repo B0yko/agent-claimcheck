@@ -14,6 +14,7 @@ All notable changes to this project are documented in this file.
 ### Fixed
 
 - Locked `certifi` bumped to 2026.10.23 (PYSEC-2026-4320).
+- A rule check on a field the receipt lacks is now skipped when the claim never asserted that field, as `docs/rules.md` documents; it used to fail and could mark a correct action `false_success`.
 
 ### Added
 

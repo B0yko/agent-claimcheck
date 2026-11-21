@@ -15,6 +15,7 @@ from agent_claimcheck.rules.engine import (
     Rule,
     RulePack,
     RulePackError,
+    _apply_check,
     builtin_packs,
     evaluate_claim,
     load_rule_pack,
@@ -593,3 +594,17 @@ def test_coding_fixed_accepts_the_async_accepted_receipt() -> None:
         {"file": "src/app.py"}, "fixed", domain="coding", steps=steps, packs=list(packs.values())
     )
     assert outcome.outcome == "receipt_only"
+
+
+def test_field_absent_from_receipt_and_claim_is_skipped_not_failed() -> None:
+    # docs/rules.md, Interpolation: a missing interpolated field skips the check.
+    check = Check(op="contains", value="{subject.attendee_email}", as_="email")
+    row, missing = _apply_check("attendees", check, {"start": "x"}, {}, {"event_id": "e1"})
+    assert (row.result, missing) == ("skipped", True)
+
+
+def test_field_absent_from_receipt_still_fails_when_the_claim_asserts_it() -> None:
+    check = Check(op="contains", value="{subject.attendee_email}", as_="email")
+    subject = {"attendee_email": "a@example.test"}
+    row, missing = _apply_check("attendees", check, subject, {}, {"event_id": "e1"})
+    assert (row.result, missing) == ("fail", False)

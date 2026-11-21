@@ -396,6 +396,10 @@ def _apply_check(
         ), False
 
     if not found:
+        if check.op != "matches":
+            values = check.value if check.op == "in" else [check.value]
+            if not all(_interpolate(item, subject, call_args)[1] for item in values):
+                return CheckResultRow(field_path, check.op, check.value, None, "skipped"), True
         return CheckResultRow(field_path, check.op, _display(check.value), None, "fail"), False
 
     if check.op == "matches":
