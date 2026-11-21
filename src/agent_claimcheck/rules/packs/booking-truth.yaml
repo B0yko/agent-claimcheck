@@ -3,6 +3,7 @@
 pack: booking-truth
 version: 1
 tools: ["find_slots", "book", "book_slot", "list_my_bookings", "reschedule_booking", "cancel_booking"]
+requires_probe: "sandbox_state"
 claims:
   booked:
     action: "book*"

@@ -97,6 +97,7 @@ class RulePack:
     claim_patterns: dict[str, tuple[re.Pattern[str], ...]]
     claims: dict[str, Rule]
     path: Path | None = None
+    requires_probe: str | None = None
 
 
 @dataclass(frozen=True)
@@ -189,6 +190,7 @@ _PACK_SCHEMA: dict[str, Any] = {
         "pack": {"type": "string"},
         "version": {"type": "integer"},
         "tools": {"type": "array", "items": {"type": "string"}},
+        "requires_probe": {"type": "string"},
         "claim_patterns": {
             "type": "object",
             "additionalProperties": {"type": "array", "items": {"type": "string"}},
@@ -325,6 +327,7 @@ def load_rule_pack(path: str | Path) -> RulePack:
         claim_patterns=claim_patterns,
         claims=claims,
         path=resolved,
+        requires_probe=raw.get("requires_probe"),
     )
 
 
@@ -340,7 +343,14 @@ def builtin_packs() -> dict[str, RulePack]:
 def pack_applies(pack: RulePack, domain: str, steps: Sequence[Step]) -> bool:
     """A pack applies when a tool_call matches one of its globs, or the trace
     makes no tool calls at all and the task domain equals the pack name.
+    A pack with `requires_probe` applies only to traces holding a matching
+    state probe, so common tool names cannot pull in another system's rules.
     """
+    if pack.requires_probe is not None and not any(
+        s.kind == "state_probe" and s.name and fnmatchcase(s.name, pack.requires_probe)
+        for s in steps
+    ):
+        return False
     tool_calls = [s for s in steps if s.kind == "tool_call" and s.name]
     if any(fnmatchcase(call.name or "", glob) for call in tool_calls for glob in pack.tools):
         return True

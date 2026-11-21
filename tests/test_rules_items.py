@@ -233,7 +233,9 @@ def _pack() -> RulePack:
     ["find_slots", "book", "book_slot", "list_my_bookings", "reschedule_booking", "cancel_booking"],
 )
 def test_pack_applies_by_tool_name(name: str) -> None:
-    assert pack_applies(_pack(), "other", [tool_call(0, name)])
+    steps = [tool_call(0, name), probe(1, "sandbox_state", output={})]
+    assert pack_applies(_pack(), "other", steps)
+    assert not pack_applies(_pack(), "other", steps[:1])
 
 
 @pytest.mark.parametrize(
@@ -333,9 +335,9 @@ def test_a_state_for_another_calendar_makes_the_claim_unknown() -> None:
         assert _outcome(claim, {"time_utc": T1}, _run(tool, receipt, state)) == "unknown"
 
 
-def test_a_foreign_book_tool_without_the_sandbox_probe_is_only_a_receipt() -> None:
+def test_a_foreign_book_tool_without_the_sandbox_probe_gets_no_rule() -> None:
     steps = _run("book", {"id": 7}, None)
-    assert _outcome("booked", {"start": T1}, steps) == "receipt_only"
+    assert _outcome("booked", {"start": T1}, steps) == "unknown"
 
 
 def test_a_booked_claim_without_a_time_confirms_nothing() -> None:
@@ -411,3 +413,33 @@ def test_evidence_row_summarises_the_list_instead_of_copying_it() -> None:
     row = output.details["claims"][0]["checks"][0]
     assert row["actual"] == {"count": 1, "some": 0}
     assert "person@example.test" not in json.dumps(output.details)
+
+
+@pytest.mark.parametrize(
+    ("claim_type", "tools"),
+    [
+        ("cancelled", ["book", "cancel_appointment"]),
+        ("rescheduled", ["book", "move_appointment"]),
+        ("booked", ["book"]),
+    ],
+)
+def test_a_foreign_agent_sharing_tool_names_is_not_judged_by_the_pack(
+    claim_type: str, tools: list[str]
+) -> None:
+    steps: list[Step] = []
+    for index, name in enumerate(tools):
+        steps.append(tool_call(index * 2, name, {}))
+        steps.append(tool_result(index * 2 + 1, name, output={"ok": True}))
+    pack = builtin_packs()["booking-truth"]
+    assert not pack_applies(pack, "booking", steps)
+    outcome = evaluate_claim(
+        {"time_utc": T1}, claim_type, domain="booking", steps=steps, packs=[pack]
+    )
+    assert outcome.outcome == "unknown"
+
+
+def test_requires_probe_must_be_a_string(tmp_path: Path) -> None:
+    path = tmp_path / "bad.yaml"
+    path.write_text("pack: x\nversion: 1\nrequires_probe: [a]\nclaims: {}\n", encoding="utf-8")
+    with pytest.raises(RulePackError):
+        load_rule_pack(path)

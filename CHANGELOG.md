@@ -20,7 +20,7 @@ All notable changes to this project are documented in this file.
 ### Added
 
 - Packaging tests: the PyPI readme's tag pins must match the project version, and the packaged readme carries only the light figures; CONTRIBUTING documents the release steps.
-- `items`, a declarative rule check on list fields (`some`, `none`, `covers`, `when`), and a built-in `booking-truth` pack that checks booked, rescheduled, cancelled and offered-slot claims against the final calendar state with no `--rules` flag.
+- `items`, a declarative rule check on list fields (`some`, `none`, `covers`, `when`), and a built-in `booking-truth` pack that checks booked, rescheduled, cancelled and offered-slot claims against the final calendar state with no `--rules` flag. The pack applies only to traces holding its `sandbox_state` probe (`requires_probe`), so other agents with similar tool names are not judged by it.
 
 ## [0.1.1] - 2026-09-28
 

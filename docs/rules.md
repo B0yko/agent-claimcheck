@@ -158,6 +158,12 @@ trace whose tool calls are all unfamiliar (none match any pack's globs) has
 no pack apply at all, so its claims are `unknown` — abstaining rather than
 guessing.
 
+A pack can also declare `requires_probe: "<glob>"`. It then applies only to
+traces that hold a `state_probe` step with a matching name, whatever their
+tool calls. The built-in `booking-truth` pack uses this: `book` and
+`find_slots` are common tool names, and another system's agent that uses them
+must not be judged by rules written for booking-truth's sandbox.
+
 Because `task.domain` is a fixed enum (`booking`, `crm`, `coding`,
 `browser`, `other`), the domain fallback branch really only matters for the
 three built-in packs. A custom pack for your own tools (see
