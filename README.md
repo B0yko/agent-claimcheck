@@ -19,7 +19,7 @@
   <a href="https://huggingface.co/datasets/aboiko/claimcheck-bench">Dataset on Hugging Face</a>
 </p>
 
-An agent's final message is a claim, not evidence. **agent-claimcheck** reads agent traces, checks every success claim against what the tools and the environment actually returned, and returns `verified`, `false_success` or `unverifiable` with a calibrated probability (traces with no success claim are `skipped`). Whatever cannot be checked goes to a human review queue instead of being guessed.
+An agent's final message is a claim, not evidence. **agent-claimcheck** reads agent traces, checks every success claim against what the tools and the environment actually returned, and returns `verified`, `false_success` or `unverifiable` with a calibrated probability (traces with no success claim are `skipped`). A claim no rule covers goes to a human review queue instead of being guessed.
 
 - **Deterministic first.** Declarative claim-evidence rules check tool receipts and state probes and cite the steps they used.
 - **Models where rules stop.** A trained classifier and any OpenAI-compatible LLM judge score what the rules leave open.
@@ -395,7 +395,7 @@ agent-claimcheck check traces.jsonl --probes probes.jsonl --out results.jsonl
 <details>
 <summary><b>Map your own tool names</b> with a rule pack</summary>
 
-A pack is a small YAML file; [`examples/rules/custom.yaml`](examples/rules/custom.yaml) maps an invented `acme.*` scheduling API. Without a pack, the rules abstain on unfamiliar tools and `cascade-offline` falls through to the classifier, which abstains only outside the booking, crm and coding domains; so map your tools, or set `task.domain` to `other`.
+A pack is a small YAML file; [`examples/rules/custom.yaml`](examples/rules/custom.yaml) maps an invented `acme.*` scheduling API. Without a pack, the rules abstain on unfamiliar tools and `cascade-offline` sends the trace to review as `unverifiable`; so map your tools to get a verdict.
 
 ```yaml
 pack: acme

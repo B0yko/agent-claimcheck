@@ -61,7 +61,7 @@ class CascadeOfflineDetector:
     def score(self, trace: DetectorView) -> DetectorOutput:
         rules_output = _calibrate(self._rules.score(trace), self._calibrators)
 
-        if _rules_conclusive(rules_output):
+        if _rules_conclusive(rules_output) or rules_output.abstain_reason == "no_rule":
             deciding, decided_by, components = rules_output, "rules", [rules_output]
         else:
             classifier_output = _calibrate(self._classifier.score(trace), self._calibrators)

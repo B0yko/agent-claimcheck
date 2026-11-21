@@ -10,6 +10,7 @@ All notable changes to this project are documented in this file.
 - Redesigned reliability and histogram charts: axis ticks and titles, a legend that never overlaps, marker area by bin size, short panel titles.
 - `check` colors verdicts in the table and the summary line, and reason details read as plain sentences in the table and the dashboard.
 - README: a light and dark banner, badges, a results summary with the full recorded tables collapsed, and dark-mode screenshots.
+- `cascade-offline` abstains when no rule covers a claim (`no_rule`), so unmapped tools go to review as `unverifiable` instead of being scored by a classifier trained on other tools.
 
 ### Fixed
 

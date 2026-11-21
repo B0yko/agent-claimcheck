@@ -74,6 +74,18 @@ def test_cascade_offline_defers_to_classifier_when_rules_abstains() -> None:
     assert classifier.calls == 1
 
 
+def test_cascade_offline_abstains_on_no_rule_without_calling_classifier() -> None:
+    no_rule = _output("rules", 0.6, abstain=True).model_copy(update={"abstain_reason": "no_rule"})
+    rules = _Stub("rules", no_rule)
+    classifier = _Stub("classifier-lr")  # raises if scored
+    ensemble = CascadeOfflineDetector(rules, classifier)
+
+    out = ensemble.score(_view())
+    assert (out.abstain, out.abstain_reason) == (True, "no_rule")
+    assert out.details["decided_by"] == "rules"
+    assert classifier.calls == 0
+
+
 def test_cascade_offline_defers_to_classifier_on_receipt_only() -> None:
     rules = _Stub("rules", _output("rules", 0.70, reason="receipt_only"))
     classifier = _Stub("classifier-lr", _output("classifier-lr", 0.4))

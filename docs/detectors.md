@@ -293,7 +293,10 @@ calibrated value it reports both belong to the deciding component, not to
 the ensemble as a whole.
 
 - **`cascade-offline`** (the default detector for `check`, and free):
-  falls through to `classifier-lr` when rules is inconclusive.
+  falls through to `classifier-lr` when rules is inconclusive
+  (`receipt_only`). When no rule covers a claim (`no_rule`) it abstains
+  instead: the classifier was trained on the built-in tool vocabulary and
+  has no signal on tools it has never seen.
 - **`cascade`**: falls through to the configured LLM judge instead.
   `details.sent_to_judge` records whether this trace reached the judge, so
   a bench report can compute the share that did. `concurrent = True`: a
