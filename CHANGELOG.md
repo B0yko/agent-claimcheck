@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-21
+
 ### Changed
 
 - README figures switch with GitHub's own theme toggle (`#gh-light/dark-mode-only` wrappers) instead of the OS color scheme; the packaged PyPI readme keeps the light variant only.

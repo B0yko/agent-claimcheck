@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-claimcheck"
-version = "0.1.1"
+version = "0.1.2"
 description = "Check AI agent success claims against trace evidence instead of trusting the final message."
 dynamic = ["readme"]
 license = "Apache-2.0"
@@ -65,19 +65,19 @@ replacement = '\1'
 
 [[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
 pattern = '!\[([^\]]*)\]\((?!https?://)([^)]+)\)'
-replacement = '![\1](https://raw.githubusercontent.com/B0yko/agent-claimcheck/v0.1.1/\2)'
+replacement = '![\1](https://raw.githubusercontent.com/B0yko/agent-claimcheck/v0.1.2/\2)'
 
 [[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
 pattern = '(src|srcset)="(?!https?://)([^"]+)"'
-replacement = '\1="https://raw.githubusercontent.com/B0yko/agent-claimcheck/v0.1.1/\2"'
+replacement = '\1="https://raw.githubusercontent.com/B0yko/agent-claimcheck/v0.1.2/\2"'
 
 [[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
 pattern = 'href="(?!https?://|#)([^"]+)"'
-replacement = 'href="https://github.com/B0yko/agent-claimcheck/blob/v0.1.1/\1"'
+replacement = 'href="https://github.com/B0yko/agent-claimcheck/blob/v0.1.2/\1"'
 
 [[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
 pattern = '\]\((?!https?://|#)([^)]+)\)'
-replacement = '](https://github.com/B0yko/agent-claimcheck/blob/v0.1.1/\1)'
+replacement = '](https://github.com/B0yko/agent-claimcheck/blob/v0.1.2/\1)'
 
 [dependency-groups]
 dev = [
