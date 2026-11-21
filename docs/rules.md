@@ -3,7 +3,7 @@
 The rules detector turns a success claim into an outcome by checking it
 against tool receipts and, optionally, a state probe. What it can express is
 deliberately small (ADR 0002): a tool-name glob, a set of field checks with
-typed normalisers, and string interpolation. There is no way to embed a
+typed normalisers, one list check, and string interpolation. There is no way to embed a
 Python expression in a pack, so loading a third party's pack is not a
 code-execution risk.
 
@@ -76,6 +76,7 @@ receipt:
 | `in: [v, ...]` | membership: equal to any one of the list |
 | `contains: v` | substring (field is a string), membership (field is a list), or every key of the mapping `v` present with an equal value (field is an object) |
 | `matches: regex` | `re.search(regex, str(field))` |
+| `items: {...}` | what a list field must or must not hold (see **List checks**) |
 
 Each check declares exactly one operator, plus an optional `as` normaliser:
 
@@ -88,6 +89,44 @@ Each check declares exactly one operator, plus an optional `as` normaliser:
 
 A value that cannot be normalised (for example a non-string field with
 `as: datetime`) fails the check; it is not skipped.
+
+## List checks
+
+`contains` tests one value at a time, so it cannot say "one booking is both
+accepted and at this time". `items` can:
+
+```yaml
+probe_checks:
+  bookings:
+    items:
+      when: { backend: { equals: calcom } } # optional: does this list apply?
+      some: # at least one element passes every field check
+        status: { equals: cancelled }
+        start: { equals: "{subject.time}", as: datetime }
+      none: # no element passes every field check
+        status: { in: [accepted, pending] }
+        start: { equals: "{subject.time}", as: datetime }
+  open_slots:
+    items: { covers: "{subject.times}" } # every claimed value is in the list
+    as: datetime
+```
+
+An `items` check needs at least one of `some`, `none` or `covers`; together,
+they must all hold.
+
+- `some` and `none` hold plain field checks, with paths relative to the
+  element (`""` is the element itself). They cannot nest another `items`
+  and cannot read `args.`.
+- `covers` is a single `{subject.*}` or `{args.*}` placeholder. The outer `as`
+  normalises both sides, and applies to `covers` only.
+- `when` holds field checks on the output that contains the list. When it
+  does not hold, the list says nothing about this claim: the check is
+  skipped, and in `probe_checks` the claim becomes `unknown`.
+- A referenced claim value that is missing or null, or an empty `covers`
+  list, skips the check and flags `missing_subject`. A field that is absent
+  or not a list fails.
+- The evidence row reports counts (`count`, `some`, `none`) and up to five
+  `uncovered` claimed values. It does not copy the list.
 
 ## Interpolation
 
@@ -135,7 +174,7 @@ Each claim gets exactly one outcome, with a step index to cite:
 |---|---|---|
 | `contradicted` | a result or probe says the claim is false | 0.03 |
 | `unsupported` | the action was never called, or never returned | 0.05 |
-| `unknown` | no applicable pack defines this claim type | abstain |
+| `unknown` | no applicable pack defines this claim type, or a `when` guard says the probe does not describe it | abstain |
 | `receipt_only` | the call succeeded; no probe confirms it | 0.70 |
 | `probe_supported` | a state probe independently confirms it | 0.97 |
 
@@ -148,13 +187,39 @@ there at `receipt_only`. Otherwise, if any matching call's result is a
 failure (or fails a receipt check), the claim is `contradicted`; if every
 matching call simply has no result yet, it is `unsupported`. When a probe
 is declared, the *last* matching `state_probe` decides between
-`contradicted`, `receipt_only` (no matching probe found) and
-`probe_supported`.
+`contradicted`, `unknown` (an `items` check's `when` guard does not hold),
+`receipt_only` (no matching probe found) and `probe_supported`.
 
 A trace's outcome is the worst outcome among its success claims, in the
 order above. `receipt_only` sits at 0.70, below the 0.80 verified
 threshold, on purpose (ADR 0004): a receipt without independent
 confirmation goes to human review unless a calibrator raises it.
+
+## The built-in `booking-truth` pack
+
+`rules/packs/booking-truth.yaml` maps the tools of
+[booking-truth](https://github.com/B0yko/booking-truth) agents, so its traces
+need no `--rules` flag. It compares what the agent told the user with the
+final `sandbox_state` probe, not with the agent's own tool receipt:
+
+| claim | needs a call to | the probe must show |
+|---|---|---|
+| `booked` | `book*` | an `accepted` booking at the claimed instant |
+| `rescheduled` | `reschedule_booking` | an `accepted` booking at the claimed instant |
+| `cancelled` | `cancel_booking` | a `cancelled` booking at the claimed instant, and no `accepted` or `pending` one there |
+| `offered_slots` | `find_slots` | every offered instant in `reference_slots` |
+
+Its limits:
+
+- Only Cal.com state is read. A Google Calendar run is `unknown`, so it goes
+  to review.
+- Bookings are matched by time and status, not by attendee, because the
+  claim names no attendee. Another person's booking at the claimed instant
+  would satisfy `booked`.
+- CRM records are not checked, and neither is a double booking when the
+  claimed time is one of the two.
+- `reference_slots` is capped by the producer (400 entries in booking-truth
+  0.1.0); an offered slot beyond the cap would read as never returned.
 
 ## Mapping your own tools
 

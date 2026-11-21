@@ -3,8 +3,8 @@
 A rule pack maps claim types to a tool-call glob, a set of receipt checks on
 that call's result, and an optional state-probe glob with its own checks. It
 never embeds a Python expression: the only vocabulary is `exists`, `equals`,
-`in`, `contains` and `matches`, plus a small set of typed
-normalisers (see `docs/rules.md` and ADR 0002).
+`in`, `contains`, `matches` and the list check `items`, plus a small set of
+typed normalisers (see `docs/rules.md` and ADR 0002).
 """
 
 from __future__ import annotations
@@ -44,8 +44,8 @@ RULE_SCORES: dict[Outcome, float | None] = {
     "probe_supported": 0.97,
 }
 
-_CheckOp = Literal["exists", "equals", "in", "contains", "matches"]
-_OPS: tuple[_CheckOp, ...] = ("exists", "equals", "in", "contains", "matches")
+_CheckOp = Literal["exists", "equals", "in", "contains", "matches", "items"]
+_OPS: tuple[_CheckOp, ...] = ("exists", "equals", "in", "contains", "matches", "items")
 _NORMALISERS = ("datetime", "email", "number", "string")
 
 
@@ -60,6 +60,21 @@ class Check:
     op: _CheckOp
     value: Any
     as_: str | None = None
+
+
+@dataclass(frozen=True)
+class ItemsCheck:
+    """The `items` operator: what must, or must not, be in a list field.
+
+    `some`: at least one element passes every field check. `none`: no element
+    does. `covers`: every value of a claimed list equals some element. `when`:
+    checks on the same output that say whether this list describes the claim.
+    """
+
+    some: dict[str, Check] | None = None
+    none: dict[str, Check] | None = None
+    covers: str | None = None
+    when: dict[str, Check] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -126,7 +141,7 @@ class ClaimOutcome:
         }
 
 
-_CHECK_SCHEMA: dict[str, Any] = {
+_FIELD_CHECK_SCHEMA: dict[str, Any] = {
     "type": "object",
     "minProperties": 1,
     "additionalProperties": False,
@@ -137,6 +152,31 @@ _CHECK_SCHEMA: dict[str, Any] = {
         "contains": {},
         "matches": {"type": "string"},
         "as": {"enum": list(_NORMALISERS)},
+    },
+}
+
+_FIELD_CHECKS_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "minProperties": 1,
+    "additionalProperties": _FIELD_CHECK_SCHEMA,
+}
+
+#: `items` holds plain field checks only, so it cannot nest.
+_CHECK_SCHEMA: dict[str, Any] = {
+    **_FIELD_CHECK_SCHEMA,
+    "properties": {
+        **_FIELD_CHECK_SCHEMA["properties"],
+        "items": {
+            "type": "object",
+            "additionalProperties": False,
+            "anyOf": [{"required": ["some"]}, {"required": ["none"]}, {"required": ["covers"]}],
+            "properties": {
+                "some": _FIELD_CHECKS_SCHEMA,
+                "none": _FIELD_CHECKS_SCHEMA,
+                "covers": {"type": "string", "pattern": r"^\{(subject|args)\.[^{}]*\}$"},
+                "when": _FIELD_CHECKS_SCHEMA,
+            },
+        },
     },
 }
 
@@ -197,8 +237,34 @@ def _build_check(raw: Mapping[str, Any], context: str) -> Check:
         except re.error as exc:
             raise RulePackError(f"{context}: bad regex {raw['matches']!r}: {exc}") from exc
         return Check(op="matches", value=pattern, as_=as_)
+    if op == "items":
+        return Check(op="items", value=_build_items(raw["items"], as_, context), as_=as_)
     value = raw["in"] if op == "in" else raw[op]
     return Check(op=op, value=value, as_=as_)
+
+
+def _build_items(raw: Mapping[str, Any], as_: str | None, context: str) -> ItemsCheck:
+    if as_ is not None and "covers" not in raw:
+        raise RulePackError(f"{context}: `as` on `items` applies only to `covers`")
+
+    def clause(name: str) -> dict[str, Check] | None:
+        if name not in raw:
+            return None
+        return {
+            path: _build_check(check, f"{context}.items.{name}.{path}")
+            for path, check in raw[name].items()
+        }
+
+    for name in ("some", "none"):
+        for path in raw.get(name, {}):
+            if path == "args" or path.startswith("args."):
+                raise RulePackError(f"{context}.items.{name}: {path!r} is not an element field")
+    return ItemsCheck(
+        some=clause("some"),
+        none=clause("none"),
+        covers=raw.get("covers"),
+        when=clause("when") or {},
+    )
 
 
 def load_rule_pack(path: str | Path) -> RulePack:
@@ -263,11 +329,11 @@ def load_rule_pack(path: str | Path) -> RulePack:
 
 
 _PACKS_DIR = Path(__file__).resolve().parent / "packs"
-_BUILTIN_PACK_NAMES = ("booking", "crm", "coding", "generic")
+_BUILTIN_PACK_NAMES = ("booking", "booking-truth", "crm", "coding", "generic")
 
 
 def builtin_packs() -> dict[str, RulePack]:
-    """The four built-in packs, keyed by pack name."""
+    """The built-in packs, keyed by pack name."""
     return {name: load_rule_pack(_PACKS_DIR / f"{name}.yaml") for name in _BUILTIN_PACK_NAMES}
 
 
@@ -386,6 +452,9 @@ def _apply_check(
     call_args: Mapping[str, Any],
     output: Any,
 ) -> tuple[CheckResultRow, bool]:
+    if check.op == "items":
+        return _apply_items(field_path, check, subject, call_args, output)
+
     actual, found = _resolve_field(field_path, output, call_args)
 
     if check.op == "exists":
@@ -442,6 +511,100 @@ def _apply_check(
     else:
         passed = False
     return CheckResultRow(field_path, "contains", expected, actual, _pf(passed)), False
+
+
+def _claim_value_missing(
+    check: Check, subject: Mapping[str, Any], call_args: Mapping[str, Any]
+) -> bool:
+    """Whether an element check depends on a claim value that is absent or null."""
+    if check.op in ("exists", "matches"):
+        return False
+    values = check.value if check.op == "in" else [check.value]
+    for item in values:
+        resolved, ok = _interpolate(item, subject, call_args)
+        if not ok or (resolved is None and item is not None):
+            return True
+    return False
+
+
+def _element_matches(
+    checks: Mapping[str, Check],
+    element: Any,
+    subject: Mapping[str, Any],
+    call_args: Mapping[str, Any],
+) -> bool:
+    rows, _missing = _evaluate_checks(checks, subject, call_args, element)
+    return all(row.result == "pass" for row in rows)
+
+
+def _items_applies(
+    check: Check, subject: Mapping[str, Any], call_args: Mapping[str, Any], output: Any
+) -> bool:
+    """Whether an `items` check's `when` guard holds on this output."""
+    if check.op != "items":
+        return True
+    guard: ItemsCheck = check.value
+    return _element_matches(guard.when, output, subject, call_args)
+
+
+def _shown(check: Check, subject: Mapping[str, Any], call_args: Mapping[str, Any]) -> Any:
+    """An element check's value for the evidence row, with claim values filled in."""
+    if check.op == "in":
+        return [_interpolate(item, subject, call_args)[0] for item in check.value]
+    if check.op in ("equals", "contains"):
+        value, ok = _interpolate(check.value, subject, call_args)
+        return value if ok else check.value
+    return _display(check.value)
+
+
+def _apply_items(
+    field_path: str,
+    check: Check,
+    subject: Mapping[str, Any],
+    call_args: Mapping[str, Any],
+    output: Any,
+) -> tuple[CheckResultRow, bool]:
+    spec: ItemsCheck = check.value
+    expected: dict[str, Any] = {
+        name: {path: _shown(c, subject, call_args) for path, c in clause.items()}
+        for name, clause in (("some", spec.some), ("none", spec.none))
+        if clause is not None
+    }
+    if spec.covers is not None:
+        expected["covers"] = spec.covers
+
+    if not _items_applies(check, subject, call_args, output):
+        return CheckResultRow(field_path, "items", expected, None, "skipped"), False
+
+    clauses = [c for c in (spec.some, spec.none) if c is not None]
+    claimed: Any = None
+    missing = any(
+        _claim_value_missing(c, subject, call_args) for clause in clauses for c in clause.values()
+    )
+    if spec.covers is not None:
+        claimed, found = _interpolate(spec.covers, subject, call_args)
+        missing = missing or not found or claimed is None or claimed == []
+    if missing:
+        return CheckResultRow(field_path, "items", expected, None, "skipped"), True
+
+    actual, found = _resolve_field(field_path, output, call_args)
+    if not found or not isinstance(actual, list):
+        return CheckResultRow(field_path, "items", expected, None, "fail"), False
+
+    summary: dict[str, Any] = {"count": len(actual)}
+    passed = True
+    if spec.some is not None:
+        summary["some"] = sum(_element_matches(spec.some, e, subject, call_args) for e in actual)
+        passed = passed and summary["some"] > 0
+    if spec.none is not None:
+        summary["none"] = sum(_element_matches(spec.none, e, subject, call_args) for e in actual)
+        passed = passed and summary["none"] == 0
+    if spec.covers is not None:
+        wanted = claimed if isinstance(claimed, list) else [claimed]
+        uncovered = [w for w in wanted if not any(_equal(e, w, check.as_) for e in actual)]
+        summary["uncovered"] = uncovered[:5]
+        passed = passed and not uncovered
+    return CheckResultRow(field_path, "items", expected, summary, _pf(passed)), False
 
 
 def _pf(passed: bool) -> Literal["pass", "fail"]:
@@ -600,6 +763,19 @@ def _resolve_probe(
             "contradicted",
             probe_step.i,
             "the state probe contradicts the claim",
+            tuple(all_checks),
+            missing_subject,
+        )
+
+    if not all(
+        _items_applies(c, subject, call.args or {}, probe_step.output)
+        for c in rule.probe_checks.values()
+    ):
+        return ClaimOutcome(
+            claim_type,
+            "unknown",
+            probe_step.i,
+            "the state probe does not describe the system this claim is about",
             tuple(all_checks),
             missing_subject,
         )

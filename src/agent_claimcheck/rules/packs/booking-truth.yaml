@@ -1,0 +1,50 @@
+# Tools and sandbox state of booking-truth agents (github.com/B0yko/booking-truth).
+# The calendar decides: a claim holds only if the final `sandbox_state` shows it.
+pack: booking-truth
+version: 1
+tools: ["find_slots", "book", "book_slot", "list_my_bookings", "reschedule_booking", "cancel_booking"]
+claims:
+  booked:
+    action: "book*"
+    receipt: {}
+    probe: "sandbox_state"
+    probe_checks:
+      calcom_bookings:
+        items:
+          when: { calendar: { equals: calcom } }
+          some:
+            status: { equals: accepted }
+            start: { equals: "{subject.time_utc}", as: datetime }
+  rescheduled:
+    action: "reschedule_booking"
+    receipt: {}
+    probe: "sandbox_state"
+    probe_checks:
+      calcom_bookings:
+        items:
+          when: { calendar: { equals: calcom } }
+          some:
+            status: { equals: accepted }
+            start: { equals: "{subject.time_utc}", as: datetime }
+  cancelled:
+    action: "cancel_booking"
+    receipt: {}
+    probe: "sandbox_state"
+    probe_checks:
+      calcom_bookings:
+        items:
+          when: { calendar: { equals: calcom } }
+          some:
+            status: { equals: cancelled }
+            start: { equals: "{subject.time_utc}", as: datetime }
+          none:
+            status: { in: [accepted, pending] }
+            start: { equals: "{subject.time_utc}", as: datetime }
+  offered_slots:
+    action: "find_slots"
+    receipt: {}
+    probe: "sandbox_state"
+    probe_checks:
+      reference_slots:
+        items: { covers: "{subject.times}" }
+        as: datetime

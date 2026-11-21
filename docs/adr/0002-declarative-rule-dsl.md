@@ -15,8 +15,9 @@ means rule packs can come from outside the project's own repository.
 Rule packs are YAML, loaded with `yaml.safe_load` (never `yaml.load`, never
 `eval`), and validated against a JSON Schema before use. A rule can only
 express: a tool-name glob, a set of field-path checks (`exists`, `equals`,
-`in`, `contains`, `matches`) with typed normalisers, and simple string
-interpolation of claim and call fields. There is no way to embed a Python
+`in`, `contains`, `matches`, and `items` for what a list must or must not
+hold) with typed normalisers, and simple string interpolation of claim and
+call fields. There is no way to embed a Python
 expression, a lambda or a callback in a pack.
 
 ## Consequences

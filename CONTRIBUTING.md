@@ -41,7 +41,7 @@ for a worked example that maps an invented tool API. To add one of your own:
    glob, `receipt` checks, and an optional `probe`/`probe_checks`).
 2. Load it directly with `load_rule_pack(path)`, or pass its path with
    `Checker(rules=[path])` / the CLI's `--rules path.yaml`, on top of the
-   three built-in domain packs.
+   built-in packs.
 3. If the pack is meant to ship as a new built-in (rather than a
    `--rules` addition users bring themselves), add the YAML file under
    `src/agent_claimcheck/rules/packs/`, add its name to

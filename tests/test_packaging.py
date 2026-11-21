@@ -62,7 +62,7 @@ def test_examples_traces_and_probes_are_included_in_the_wheel(wheel: zipfile.Zip
 def test_rule_packs_are_included_in_the_wheel(wheel: zipfile.ZipFile) -> None:
     names = set(wheel.namelist())
     packs_dir = REPO_ROOT / "src" / "agent_claimcheck" / "rules" / "packs"
-    for pack in ("booking", "crm", "coding", "generic"):
+    for pack in ("booking", "booking-truth", "crm", "coding", "generic"):
         packaged_path = f"agent_claimcheck/rules/packs/{pack}.yaml"
         assert packaged_path in names
         assert wheel.read(packaged_path) == (packs_dir / f"{pack}.yaml").read_bytes()

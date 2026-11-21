@@ -467,7 +467,7 @@ More in [`docs/python-api.md`](docs/python-api.md).
 
 </details>
 
-**Works with any agent-trace/v1 producer.** The format is shared with [booking-truth](https://github.com/B0yko/booking-truth), which grades booking agents by the end state of a sandbox calendar and CRM, and [proof-of-done](https://github.com/B0yko/proof-of-done), a coding-agent hook that blocks "tests pass", "build succeeds" or "deployed" unless the transcript shows the command ran after the last edit and succeeded. Traces flow only through the format, results follow [`schemas/claimcheck-result-v1.json`](schemas/claimcheck-result-v1.json), reviews are written back as agent-trace/v1, and [`docs/interop.md`](docs/interop.md) maps OpenTelemetry GenAI spans, Langfuse observations and LangSmith runs onto it.
+**Reads any agent-trace/v1 producer; rule verdicts need a pack for its tool names.** The format is shared with [booking-truth](https://github.com/B0yko/booking-truth), which grades booking agents by the end state of a sandbox calendar and CRM (a built-in pack checks its booking, reschedule, cancellation and offered-slot claims against the Cal.com state, not its CRM), and [proof-of-done](https://github.com/B0yko/proof-of-done), a coding-agent hook that blocks "tests pass", "build succeeds" or "deployed" unless the transcript shows the command ran after the last edit and succeeded. Traces flow only through the format, results follow [`schemas/claimcheck-result-v1.json`](schemas/claimcheck-result-v1.json), reviews are written back as agent-trace/v1, and [`docs/interop.md`](docs/interop.md) maps OpenTelemetry GenAI spans, Langfuse observations and LangSmith runs onto it.
 
 ## Configuration
 
